@@ -1,3 +1,4 @@
+mod adapters;
 mod metrics;
 mod report;
 mod table;
@@ -9,21 +10,31 @@ use std::{env, fs};
 fn analyse(path: &str) -> Option<metrics::FileMetrics> {
     let src = match fs::read_to_string(path) {
         Ok(s) => s,
-        Err(e) => { eprintln!("error reading {path}: {e}"); return None; }
+        Err(e) => {
+            eprintln!("error reading {path}: {e}");
+            return None;
+        }
     };
-    let file = match syn::parse_file(&src) {
-        Ok(f) => f,
-        Err(e) => { eprintln!("parse error in {path}: {e}"); return None; }
+    let adapter = match adapters::for_path(path) {
+        Ok(adapter) => adapter,
+        Err(e) => {
+            eprintln!("{path}: {e}");
+            return None;
+        }
     };
-    let raw  = visit::collect(&file);
-    let fns: Vec<_> = raw.iter().map(metrics::compute).collect();
-    Some(metrics::aggregate(path, &raw, fns, src.lines().count()))
+    match adapter.analyse(path, &src) {
+        Ok(metrics) => Some(metrics),
+        Err(e) => {
+            eprintln!("{path}: {e}");
+            None
+        }
+    }
 }
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
-        eprintln!("usage: assay <file.rs> [...]");
+        eprintln!("usage: assay <file.rs|file.py|file.ts> [...]");
         std::process::exit(1);
     }
     let files: Vec<_> = args.iter().filter_map(|p| analyse(p)).collect();
