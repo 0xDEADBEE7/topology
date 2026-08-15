@@ -1,5 +1,6 @@
 use crate::{metrics, visit::RawCounts};
 
+/// Analyse source with the lightweight line-based adapter shared by scripting languages.
 pub fn analyse_text(language: &'static str, path: &str, source: &str) -> metrics::FileMetrics {
     let mut raw = Vec::new();
     let mut current: Option<RawCounts> = None;
@@ -17,6 +18,7 @@ pub fn analyse_text(language: &'static str, path: &str, source: &str) -> metrics
                 line_start: index + 1,
                 line_end: index + 1,
                 decisions: 1,
+                has_docstring: language == "python" && has_python_docstring(source, index),
                 ..RawCounts::default()
             });
         }
@@ -39,14 +41,73 @@ pub fn analyse_text(language: &'static str, path: &str, source: &str) -> metrics
         function.dn2 = function.n2.max(1);
     }
     let functions = raw.iter().map(metrics::compute).collect();
-    metrics::aggregate(language, path, &raw, functions, source.lines().count())
+    let mut classes = Vec::new();
+    if language == "python" {
+        for (index, line) in source.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if let Some(rest) = trimmed.strip_prefix("class ") {
+                let name = rest.split(['(', ':']).next().unwrap_or("").trim();
+                if !name.is_empty() {
+                    classes.push(metrics::ClassMetrics {
+                        name: name.to_owned(),
+                        line_start: index + 1,
+                        line_end: index + 1,
+                    });
+                }
+            }
+        }
+    }
+    metrics::aggregate(
+        language,
+        path,
+        &raw,
+        functions,
+        classes,
+        has_file_docstring(language, source),
+        source.lines().count(),
+    )
 }
 
+fn has_file_docstring(language: &str, source: &str) -> bool {
+    if language == "python" {
+        return source
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .is_some_and(|line| {
+                let line = line.trim();
+                line.starts_with("\"\"\"") || line.starts_with("''' ") || line == "'''"
+            });
+    }
+    source
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .is_some_and(|line| line.trim_start().starts_with("/**"))
+}
+
+fn has_python_docstring(source: &str, index: usize) -> bool {
+    let lines: Vec<&str> = source.lines().skip(index + 1).collect();
+    lines
+        .iter()
+        .find(|line| !line.trim().is_empty())
+        .is_some_and(|line| {
+            let line = line.trim_start();
+            line.starts_with("\"\"\"") || line.starts_with("'''")
+        })
+}
 fn function_name(language: &str, line: &str) -> Option<String> {
+    let line = line.trim_start();
     let marker = if language == "python" {
-        "def "
-    } else {
+        if line.starts_with("async def ") {
+            "async def "
+        } else {
+            "def "
+        }
+    } else if line.starts_with("export function ") {
+        "export function "
+    } else if line.starts_with("function ") {
         "function "
+    } else {
+        return None;
     };
     let start = line.find(marker)? + marker.len();
     let name: String = line[start..]

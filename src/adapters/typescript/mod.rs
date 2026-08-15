@@ -9,6 +9,7 @@ impl Adapter for TypeScriptAdapter {
         "typescript"
     }
 
+    /// Analyse TypeScript declarations and function bodies with tree-sitter.
     fn analyse(&self, path: &str, source: &str) -> Result<metrics::FileMetrics, String> {
         let mut parser = Parser::new();
         parser
@@ -23,27 +24,63 @@ impl Adapter for TypeScriptAdapter {
         }
 
         let mut raw = Vec::new();
-        collect_functions(tree.root_node(), source.as_bytes(), &mut raw);
+        let mut classes = Vec::new();
+        collect_declarations(tree.root_node(), source.as_bytes(), &mut raw, &mut classes);
         let functions = raw.iter().map(metrics::compute).collect();
         Ok(metrics::aggregate(
             self.language(),
             path,
             &raw,
             functions,
+            classes,
+            has_file_docstring(tree.root_node(), source.as_bytes()),
             source.lines().count(),
         ))
     }
 }
 
-fn collect_functions(node: Node<'_>, source: &[u8], output: &mut Vec<RawCounts>) {
+fn collect_declarations(
+    node: Node<'_>,
+    source: &[u8],
+    functions: &mut Vec<RawCounts>,
+    classes: &mut Vec<crate::metrics::ClassMetrics>,
+) {
     if is_function(node.kind()) {
-        output.push(count_function(node, source));
+        functions.push(count_function(node, source));
+    } else if is_class(node.kind()) {
+        classes.push(crate::metrics::ClassMetrics {
+            name: node
+                .child_by_field_name("name")
+                .and_then(|name| name.utf8_text(source).ok())
+                .unwrap_or("<anonymous>")
+                .to_owned(),
+            line_start: node.start_position().row + 1,
+            line_end: node.end_position().row + 1,
+        });
     }
 
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        collect_functions(child, source, output);
+        collect_declarations(child, source, functions, classes);
     }
+}
+
+fn has_file_docstring(root: Node<'_>, source: &[u8]) -> bool {
+    root.named_child(0).is_some_and(|node| {
+        node.kind() == "comment"
+            && node
+                .utf8_text(source)
+                .is_ok_and(|text| text.trim_start().starts_with("/**"))
+    })
+}
+
+fn has_preceding_comment(node: Node<'_>, source: &[u8]) -> bool {
+    node.prev_named_sibling().is_some_and(|sibling| {
+        sibling.kind() == "comment"
+            && sibling
+                .utf8_text(source)
+                .is_ok_and(|text| text.trim_start().starts_with("/**"))
+    })
 }
 
 fn count_function(node: Node<'_>, source: &[u8]) -> RawCounts {
@@ -61,6 +98,7 @@ fn count_function(node: Node<'_>, source: &[u8]) -> RawCounts {
         n2: counts.operands,
         dn1: counts.operators.max(1),
         dn2: counts.operands.max(1),
+        has_docstring: has_preceding_comment(node, source),
     }
 }
 
@@ -83,7 +121,7 @@ struct Counts {
     operands: u32,
 }
 
-fn count_node(node: Node<'_>, root_kind: &str, depth: u32, source: &[u8], counts: &mut Counts) {
+fn count_node(node: Node<'_>, root_kind: &str, depth: u32, _source: &[u8], counts: &mut Counts) {
     if node.kind() != root_kind && is_function(node.kind()) {
         return;
     }
@@ -107,10 +145,13 @@ fn count_node(node: Node<'_>, root_kind: &str, depth: u32, source: &[u8], counts
     };
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        count_node(child, root_kind, next_depth, source, counts);
+        count_node(child, root_kind, next_depth, _source, counts);
     }
 }
 
+fn is_class(kind: &str) -> bool {
+    matches!(kind, "class_declaration" | "abstract_class_declaration")
+}
 fn is_function(kind: &str) -> bool {
     matches!(
         kind,

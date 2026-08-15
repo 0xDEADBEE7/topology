@@ -1,3 +1,7 @@
+//! Defines the contract implemented by each supported language adapter.
+
+//! Defines the contract implemented by each supported language adapter.
+
 use crate::metrics::FileMetrics;
 
 pub trait Adapter {

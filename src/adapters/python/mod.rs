@@ -1,3 +1,5 @@
+//! Adapts Python source to the shared line-oriented analyser.
+
 use super::{common, Adapter};
 
 pub struct PythonAdapter;
