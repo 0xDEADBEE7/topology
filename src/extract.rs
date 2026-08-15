@@ -1,3 +1,5 @@
+//! Coordinates source extraction into file, import, and symbol records.
+
 mod models;
 
 use models::{Export, FileRecord, ImportRecord, Metrics, SymbolMetrics, SymbolRecord};
