@@ -87,47 +87,15 @@ Consider moving repository traversal and public query orchestration:
 
 The final `src/extract.rs` should ideally only declare submodules, define `SymbolInfo`, and re-export or delegate the public API. Avoid leaving the 139-LoC `records` function or 90-LoC import parser in the barrel.
 
-## Suggested implementation order
-
-1. Create `src/extract/models.rs` is already complete; retain it.
-2. Create `metadata.rs`; move helpers and update imports.
-3. Create `imports.rs`; move `ImportRecord` usage and parsing tests.
-4. Create `records.rs`; move record assembly and add a narrow `pub(super)` entry point.
-5. Move traversal/public API into `repository.rs` if the barrel remains above 300 LoC.
-6. Make `src/extract.rs` a documented barrel with minimal delegation.
-7. Move tests alongside the behavior they verify, or keep only integration-facing tests in the barrel.
-
-Use `fs_edit` for source changes. Do not discard unrelated work or reset the repository.
-
 ## Compatibility requirements
 
-Preserve:
-
-- `crate::extract::run`;
-- `crate::extract::find`;
-- `crate::extract::file_outline`;
-- `crate::extract::file_descriptions`;
-- `SymbolInfo` fields and visibility;
-- serialized record shapes, field names, IDs, line ranges, import resolution values, and output order;
-- existing CLI behavior for `extract` and `find`.
-
-The current adapters and metrics APIs should remain unchanged.
+Preserve the existing public APIs (`run`, `find`, `file_outline`, and `file_descriptions`), `SymbolInfo`, serialized record shapes, IDs, line ranges, import resolution, output order, CLI behavior, and adapter/metrics APIs. Do not change unrelated modules.
 
 ## Documentation requirements
 
-Follow `docs/code-style.md`:
-
-- every module gets a `//!` responsibility description;
-- every public item gets a concise `///` description;
-- document non-obvious private helpers;
-- describe responsibility and behavior, not implementation mechanics;
-- keep descriptions short and stable.
-
-Avoid duplicate prose between the barrel and submodules. The barrel should link responsibility through topology rather than restating implementation details.
+Follow `docs/code-style.md`: every module needs a `//!` responsibility description, every public item a concise `///` description, and non-obvious private helpers should be documented. Avoid duplicating prose between the barrel and submodules.
 
 ## Verification checklist
-
-Run after each cohesive boundary extraction:
 
 ```bash
 cargo fmt --all
@@ -135,16 +103,11 @@ cargo test --quiet
 cargo check --quiet
 assay score ./src/extract.rs --detail --all-metrics --no-colour
 assay score ./src/extract/* --detail --all-metrics --no-colour
-```
-
-Also run a behavior smoke test:
-
-```bash
 cargo run --quiet -- extract . >/dev/null
 cargo run --quiet -- find records
 ```
 
-Use `cargo clippy --all-targets --all-features -- -D warnings` only as supplemental feedback. The repository currently has unrelated pre-existing Clippy failures in `src/table.rs` and `src/main.rs`; do not broaden this task to fix them unless explicitly requested.
+Clippy has unrelated pre-existing failures in `src/table.rs` and `src/main.rs`; do not broaden this task for them.
 
 ## Completion criteria
 
