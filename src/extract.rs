@@ -1,83 +1,11 @@
-//! Parses supported source files into compact file and symbol records.
+mod models;
 
-use serde::Serialize;
+use models::{Export, FileRecord, ImportRecord, Metrics, SymbolMetrics, SymbolRecord};
+
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-
-#[derive(Clone, Serialize)]
-struct ImportRecord {
-    id: String,
-    #[serde(rename = "type")]
-    record_type: &'static str,
-    repo: String,
-    path: String,
-    language: &'static str,
-    line: usize,
-    source: String,
-    local_name: Option<String>,
-    imported_name: Option<String>,
-    resolved_path: Option<String>,
-    resolved_symbol: Option<String>,
-    resolution: &'static str,
-}
-#[derive(Serialize)]
-struct FileRecord {
-    id: String,
-    #[serde(rename = "type")]
-    record_type: &'static str,
-    repo: String,
-    path: String,
-    description: Option<String>,
-    imports: Vec<String>,
-    exports: Vec<Export>,
-    metrics: Metrics,
-}
-
-#[derive(Serialize)]
-struct SymbolRecord {
-    id: String,
-    #[serde(rename = "type")]
-    record_type: &'static str,
-    repo: String,
-    path: String,
-    name: String,
-    kind: &'static str,
-    qualified_name: String,
-    language: &'static str,
-    visibility: &'static str,
-    parent: Option<String>,
-    signature: String,
-    lines: [usize; 2],
-    description: Option<String>,
-    metrics: Option<SymbolMetrics>,
-}
-
-#[derive(Serialize)]
-struct Export {
-    signature: String,
-    lines: [usize; 2],
-    description: Option<String>,
-}
-
-#[derive(Serialize)]
-struct SymbolMetrics {
-    loc: usize,
-    cc: u32,
-    cognitive: u32,
-    halstead: f64,
-}
-
-#[derive(Serialize)]
-struct Metrics {
-    language: &'static str,
-    loc: usize,
-    cc: u32,
-    cognitive: u32,
-    halstead: f64,
-    nmi: f64,
-}
 
 #[derive(Clone, Debug)]
 pub struct SymbolInfo {
