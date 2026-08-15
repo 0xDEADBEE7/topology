@@ -146,6 +146,7 @@ pub fn find(root: &str, query: &str) -> Result<Vec<SymbolInfo>, String> {
     Ok(matches)
 }
 
+/// Convert one serialized symbol record into the public outline shape.
 fn symbol_info(value: &serde_json::Value) -> Option<SymbolInfo> {
     let kind = value.get("kind")?.as_str()?.to_owned();
     Some(SymbolInfo {
@@ -224,6 +225,7 @@ pub fn run(root: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Walk a repository while excluding generated and dependency directories.
 fn walk(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = fs::read_dir(root).map_err(|e| format!("{}: {e}", root.display()))?;
     for entry in entries {
@@ -246,6 +248,7 @@ fn walk(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
+/// Report whether a path uses one of the supported source extensions.
 fn supported(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
@@ -254,6 +257,7 @@ fn supported(path: &Path) -> bool {
 }
 
 /// Build the file and symbol records used by the stash-backed views.
+/// Parse one source file and assemble its file, import, and symbol records.
 fn records(root: &Path, repo: &str, path: &Path) -> Result<Vec<serde_json::Value>, String> {
     let source = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let relative = path
@@ -394,6 +398,7 @@ fn records(root: &Path, repo: &str, path: &Path) -> Result<Vec<serde_json::Value
     Ok(output)
 }
 
+/// Parse one source line into zero or more language-specific imports.
 fn import_records(language: &str, line: &str, line_number: usize) -> Vec<ImportRecord> {
     let text = line.trim();
     let entries: Vec<(String, Option<String>, Option<String>)> = if language == "rust"
@@ -485,6 +490,7 @@ fn import_records(language: &str, line: &str, line_number: usize) -> Vec<ImportR
         .collect()
 }
 
+/// Remove matching Python triple-quote delimiters from a documentation line.
 fn quoted_doc(line: &str) -> Option<String> {
     let quote = if line.starts_with("\"\"\"") {
         "\"\"\""
@@ -495,6 +501,7 @@ fn quoted_doc(line: &str) -> Option<String> {
     Some(text.strip_suffix(quote).unwrap_or(text).trim().to_owned())
 }
 
+/// Normalize an adapter language identifier for serialized output.
 fn language_name(language: &str) -> &'static str {
     match language {
         "rust" => "rust",
@@ -505,6 +512,7 @@ fn language_name(language: &str) -> &'static str {
     }
 }
 
+/// Resolve an import against files local to the repository.
 fn resolve_import(root: &Path, current: &str, language: &str, source: &str) -> Option<String> {
     let candidates = if language == "rust" {
         let module = source.strip_prefix("crate::")?.split("::").next()?;
@@ -544,6 +552,7 @@ fn resolve_import(root: &Path, current: &str, language: &str, source: &str) -> O
     })
 }
 
+/// Remove a supported source extension from a relative module path.
 fn module_path(path: &str) -> &str {
     path.strip_suffix(".rs")
         .or_else(|| path.strip_suffix(".py"))
@@ -552,10 +561,12 @@ fn module_path(path: &str) -> &str {
         .unwrap_or(path)
 }
 
+/// Build the stable symbol identifier used by extraction consumers.
 fn qualified_name(path: &str, name: &str) -> String {
     format!("{}::{name}", module_path(path))
 }
 
+/// Map an adapter language to the exported record kind.
 fn class_kind(language: &str) -> &'static str {
     match language {
         "rust" => "struct",
@@ -564,6 +575,7 @@ fn class_kind(language: &str) -> &'static str {
     }
 }
 
+/// Infer source visibility from the declaration line.
 fn visibility(language: &str, source: &str, line: usize) -> &'static str {
     let text = source
         .lines()
@@ -582,6 +594,7 @@ fn visibility(language: &str, source: &str, line: usize) -> &'static str {
         "private"
     }
 }
+/// Collect a declaration signature across continuation lines.
 fn signature(language: &str, source: &str, line: usize) -> String {
     let mut result = Vec::new();
     for text in source.lines().skip(line.saturating_sub(1)).take(30) {
@@ -599,6 +612,7 @@ fn signature(language: &str, source: &str, line: usize) -> String {
     result.join(" ")
 }
 
+/// Determine whether a declaration is part of the language's public surface.
 fn is_exported(language: &str, source: &str, line: usize) -> bool {
     let text = source
         .lines()
