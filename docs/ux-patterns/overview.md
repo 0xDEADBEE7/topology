@@ -1,29 +1,47 @@
-# Repository overview
+# Progressive repository inspection
 
-Start with the file tree, including file-level descriptions extracted from doc comments or docstrings:
+Use the smallest view that answers the current question. Assay's default invocation is structural inspection.
 
-```bash
-STASH_DIR=/path/to/repo/.stash stash get type=file \
-  | jq -sr '
-      map(select(.path))
-      | sort_by(.path)
-      | .[]
-      | (.path + (if .description then "  — " + .description else "" end))
-    '
-```
-
-A compact tree view with directory indentation:
+## 1. Orient yourself
 
 ```bash
-STASH_DIR=/path/to/repo/.stash stash get type=file \
-  | jq -sr '
-      map(select(.path) | {path, description: (.description // "")})
-      | sort_by(.path)
-      | .[]
-      | (.path + (if .description == "" then "" else "  # " + .description end))
-    '
+assay ./src
 ```
 
-The second form is intentionally simple and works well as a first orientation. For the project-specific richer report, use the repository's `show-overview.sh` pattern; it combines files, symbols, metrics, public surface, and suggested reading ranges.
+This shows directories, files, and concise file documentation.
 
-Continue with [exports](./exports.md) to inspect a file's API or [definitions](./definitions.md) to locate a symbol.
+## 2. Inspect a file
+
+```bash
+assay ./src/visitor.rs
+```
+
+This shows the file description and its symbols with line ranges. It is an outline, not a source dump; use it to choose what deserves attention.
+
+## 3. Inspect an implementation
+
+```bash
+assay ./src/visitor.rs::visit_expr_while
+```
+
+This shows the signature and source range for one symbol.
+
+## 4. Find an unknown location
+
+```bash
+assay find visit_expr_while
+```
+
+The result lists every matching definition. Pass any result back to `assay` to inspect it.
+
+## 5. Score only when evaluating quality
+
+```bash
+assay score ./src --detail --all-metrics
+```
+
+Use `score` for measurement and threshold-oriented review, not orientation. Use `assay extract` when another tool needs structured records.
+
+```text
+directory → file outline → symbol definition → relevant source
+```

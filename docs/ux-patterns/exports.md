@@ -26,7 +26,14 @@ STASH_DIR=/path/to/repo/.stash stash get type=file \
     '
 ```
 
-Use the symbol index when you need searchable names, qualified names, documentation, or metrics rather than only a file's public surface:
+Use the symbol index when you need searchable names, qualified names, documentation, or metrics rather than only a file's public surface. For live exploration, prefer the direct CLI:
+
+```bash
+assay ./src/metrics.rs
+assay find compute
+```
+
+For persistent queries, the extracted symbol records remain available through `stash`:
 
 ```bash
 STASH_DIR=/path/to/repo/.stash stash get type=function type=class \

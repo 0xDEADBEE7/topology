@@ -1,44 +1,24 @@
-# Locate a symbol definition
+# Find a symbol definition
 
-Use the indexed symbol records to find a function, class, or struct by name or qualified name:
-
-```bash
-query=compute
-STASH_DIR=/path/to/repo/.stash stash get type=function type=class \
-  | jq -sr --arg query "$query" '
-      .[]
-      | select(.name == $query or .qualified_name == $query)
-      | [.name, (.kind // .type), .path,
-         ((.lines[0] | tostring) + "-" + (.lines[1] | tostring)),
-         (.signature // "")]
-      | @tsv
-    '
-```
-
-A qualified name is less ambiguous when a repository defines the same name more than once:
+Use the live CLI when exploring the current checkout:
 
 ```bash
-query=src/metrics::compute
-STASH_DIR=/path/to/repo/.stash stash get type=function type=class \
-  | jq -sr --arg query "$query" '
-      .[]
-      | select(.qualified_name == $query)
-      | "\(.path):\(.lines[0])-\(.lines[1])  \(.signature)"
-    '
+assay find compute
 ```
 
-To print the source range after locating it, keep the source checkout as the current directory:
+It returns every matching function, class, or struct with a navigable path and line range. Inspect a result directly:
 
 ```bash
-STASH_DIR=/path/to/repo/.stash stash get type=function type=class \
-  | jq -sr --arg query "$query" '
-      .[] | select(.name == $query or .qualified_name == $query)
-      | [.path, .lines[0], .lines[1]] | @tsv
-    ' \
-  | while IFS=$'\t' read -r path start end; do
-      printf '%s:%s-%s\n' "$path" "$start" "$end"
-      sed -n "${start},${end}p" "$path"
-    done
+assay ./src/metrics.rs::compute
 ```
 
-The stored range is metadata from the extraction snapshot. Refresh the store after edits; otherwise the range can be stale. See [exports](./exports.md) for file-level public declarations and [imports](./imports.md) for dependencies.
+Queries can be qualified:
+
+```bash
+assay find src/metrics::compute
+assay ./src/metrics.rs::compute
+```
+
+`find` answers “where is it defined?” and returns coordinates. The default inspection command answers “what does it contain?” or “how is it implemented?” Keep search output compact.
+
+For persistent or scriptable indexes, use `assay extract` with `stash` as described in [store](./store.md). Refresh an index after source edits because stored line ranges can become stale.

@@ -64,45 +64,71 @@ fn analyse(path: &str) -> Option<metrics::FileMetrics> {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: assay [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]");
-    eprintln!("       assay --guide");
-    eprintln!("       assay tree <dir>");
+    eprintln!("usage: assay <path|path::symbol>");
+    eprintln!("       assay find <symbol>");
     eprintln!(
-        "metrics: nmi, loc, docstring, cc, cognitive, halstead (default: nmi; --all-metrics: all)"
+        "       assay score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]"
     );
+    eprintln!("       assay extract <dir>");
     std::process::exit(1);
 }
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.first().map(String::as_str) == Some("tree") {
-        let root = args.get(1).map(String::as_str).unwrap_or(".");
-        if let Err(error) = tree::run(root) {
-            eprintln!("error: {error}");
-            std::process::exit(1);
+    match args.first().map(String::as_str) {
+        Some("extract") => {
+            let root = args.get(1).cloned().unwrap_or_else(|| ".".to_owned());
+            if let Err(error) = extract::run(&root) {
+                eprintln!("error: {error}");
+                std::process::exit(1);
+            }
+            return;
         }
-        return;
+        Some("find") => {
+            let query = args.get(1).map(String::as_str).unwrap_or_else(|| usage());
+            match extract::find(".", query) {
+                Ok(matches) => {
+                    println!("{} matches for '{query}':", matches.len());
+                    for symbol in matches {
+                        println!(
+                            "{}::{} [{}] (L{}–{})",
+                            symbol.path, symbol.name, symbol.kind, symbol.lines[0], symbol.lines[1]
+                        );
+                    }
+                }
+                Err(error) => {
+                    eprintln!("error: {error}");
+                    std::process::exit(1);
+                }
+            }
+            return;
+        }
+        Some("score") => score(&args[1..]),
+        Some("tree") => {
+            let target = args.get(1).map(String::as_str).unwrap_or(".");
+            if let Err(error) = tree::inspect(target) {
+                eprintln!("error: {error}");
+                std::process::exit(1);
+            }
+            return;
+        }
+        _ => {
+            let target = args.first().map(String::as_str).unwrap_or_else(|| usage());
+            if let Err(error) = tree::inspect(target) {
+                eprintln!("error: {error}");
+                std::process::exit(1);
+            }
+            return;
+        }
     }
-    if args.first().map(String::as_str) == Some("extract") {
-        let root = args.get(1).cloned().unwrap_or_else(|| ".".to_owned());
-        if let Err(error) = extract::run(&root) {
-            eprintln!("error: {error}");
-            std::process::exit(1);
-        }
-        if args.iter().any(|arg| arg == "--guide") {
-            report::print_guide(
-                !args
-                    .iter()
-                    .any(|arg| arg == "--no-colour" || arg == "--no-color"),
-            );
-        }
-        return;
-    }
+}
+
+fn score(args: &[String]) {
     let mut options = report::Options::default();
     let mut files = Vec::new();
     let mut index = 0;
     while index < args.len() {
-        let arg = args[index].clone();
+        let arg = &args[index];
         index += 1;
         match arg.as_str() {
             "--detail" | "--functions" => options.detail = true,
@@ -123,7 +149,7 @@ fn main() {
                 index += 1;
                 options.metrics = report::parse_metrics(&value).unwrap_or_else(|e| {
                     eprintln!("{e}");
-                    usage();
+                    usage()
                 });
             }
             "--help" | "-h" => usage(),

@@ -79,6 +79,91 @@ struct Metrics {
     nmi: f64,
 }
 
+#[derive(Clone, Debug)]
+pub struct SymbolInfo {
+    pub path: String,
+    pub name: String,
+    pub kind: String,
+    pub qualified_name: String,
+    pub signature: String,
+    pub lines: [usize; 2],
+    pub description: Option<String>,
+}
+
+/// Return the indexed symbols belonging to one source file.
+pub fn file_outline(path: &str) -> Result<(Option<String>, Vec<SymbolInfo>), String> {
+    let root = fs::canonicalize(".").map_err(|e| e.to_string())?;
+    let path = fs::canonicalize(path).map_err(|e| format!("{path}: {e}"))?;
+    let repo = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("repository")
+        .to_owned();
+    let values = records(&root, &repo, &path)?;
+    let description = values.iter().find_map(|value| {
+        (value.get("type")?.as_str()? == "file")
+            .then(|| {
+                value
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+            })
+            .flatten()
+    });
+    let symbols = values
+        .iter()
+        .filter(|value| {
+            value.get("type").and_then(|v| v.as_str()) == Some("function")
+                || value.get("type").and_then(|v| v.as_str()) == Some("class")
+        })
+        .filter_map(symbol_info)
+        .collect();
+    Ok((description, symbols))
+}
+
+/// Find all extracted function and class definitions matching a name.
+pub fn find(root: &str, query: &str) -> Result<Vec<SymbolInfo>, String> {
+    let root_path = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
+    let repo = root_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("repository")
+        .to_owned();
+    let mut paths = Vec::new();
+    walk(&root_path, &mut paths)?;
+    let mut matches = Vec::new();
+    for path in paths {
+        for value in records(&root_path, &repo, &path)? {
+            if let Some(symbol) = symbol_info(&value) {
+                let path_name = format!("{}::{}", symbol.path, symbol.name);
+                if symbol.name == query || symbol.qualified_name == query || path_name == query {
+                    matches.push(symbol);
+                }
+            }
+        }
+    }
+    matches.sort_by(|a, b| a.path.cmp(&b.path).then(a.lines[0].cmp(&b.lines[0])));
+    Ok(matches)
+}
+
+fn symbol_info(value: &serde_json::Value) -> Option<SymbolInfo> {
+    let kind = value.get("kind")?.as_str()?.to_owned();
+    Some(SymbolInfo {
+        path: value.get("path")?.as_str()?.to_owned(),
+        name: value.get("name")?.as_str()?.to_owned(),
+        kind,
+        qualified_name: value.get("qualified_name")?.as_str()?.to_owned(),
+        signature: value.get("signature")?.as_str()?.to_owned(),
+        lines: [
+            value.get("lines")?.get(0)?.as_u64()? as usize,
+            value.get("lines")?.get(1)?.as_u64()? as usize,
+        ],
+        description: value
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned),
+    })
+}
 /// File descriptions from an extraction snapshot, ordered by path.
 pub fn file_descriptions(root: &str) -> Result<Vec<(String, Option<String>)>, String> {
     let root = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;

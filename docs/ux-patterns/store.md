@@ -36,4 +36,4 @@ target/release/assay extract "$repo" \
 export STASH_DIR="$store"
 ```
 
-Keep the store and source checkout aligned; definitions use stored line ranges and then read source from the checkout.
+Keep the store and source checkout aligned; stored records and line ranges are snapshots. For current exploration, prefer the live commands `assay PATH`, `assay PATH::SYMBOL`, and `assay find NAME`. Use the store for persistent or scriptable queries.
