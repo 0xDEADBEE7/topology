@@ -1,4 +1,4 @@
-local/
-/target
-/plan
-/.stash/
+target/
+.local/
+.plan/
+.stash/
