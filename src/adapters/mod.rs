@@ -6,6 +6,7 @@ pub mod typescript;
 
 pub use base::Adapter;
 
+/// Select the language adapter from a source path.
 pub fn for_path(path: &str) -> Result<Box<dyn Adapter>, String> {
     match std::path::Path::new(path)
         .extension()

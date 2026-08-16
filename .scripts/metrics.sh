@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-METRICS_BIN="target/release/assay"
+METRICS_BIN="target/release/topo"
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; RESET='\033[0m'
 
 # ── Section 1: LoC breakdown ──────────────────────────────────────────────────
@@ -49,11 +49,11 @@ fi
 echo ""
 echo "=== Complexity ==="
 if [[ ! -f "$METRICS_BIN" ]]; then
-    echo "Building assay..."
+    echo "Building topo..."
     cargo build --release -q
 fi
 
-# Pass all source files in one invocation so assay renders a single table
+# Pass all source files in one invocation so topo renders a single table
 src_files=()
 while IFS= read -r -d '' f; do
     src_files+=("$f")

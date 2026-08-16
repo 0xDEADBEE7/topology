@@ -1,3 +1,5 @@
+//! Computes file and function health metrics from raw syntax counts.
+
 use crate::visit::RawCounts;
 
 #[derive(Debug)]
@@ -9,6 +11,14 @@ pub struct FnMetrics {
     pub cc: u32,
     pub cognitive: u32,
     pub halstead: f64,
+    pub has_docstring: bool,
+}
+
+#[derive(Debug)]
+pub struct ClassMetrics {
+    pub name: String,
+    pub line_start: usize,
+    pub line_end: usize,
 }
 
 pub struct FileMetrics {
@@ -19,7 +29,9 @@ pub struct FileMetrics {
     pub cognitive: u32,
     pub halstead: f64,
     pub nmi: f64,
+    pub has_docstring: bool,
     pub fns: Vec<FnMetrics>,
+    pub classes: Vec<ClassMetrics>,
 }
 
 fn halstead_volume(n1: u32, n2: u32, dn1: u32, dn2: u32) -> f64 {
@@ -28,6 +40,7 @@ fn halstead_volume(n1: u32, n2: u32, dn1: u32, dn2: u32) -> f64 {
     big_n * small_n.log2()
 }
 
+/// Compute function-level complexity metrics from raw visitor counts.
 pub fn compute(r: &RawCounts) -> FnMetrics {
     let loc = r.line_end.saturating_sub(r.line_start) + 1;
     let halstead = halstead_volume(r.n1, r.n2, r.dn1, r.dn2);
@@ -39,14 +52,18 @@ pub fn compute(r: &RawCounts) -> FnMetrics {
         cc: r.decisions,
         cognitive: r.cognitive,
         halstead,
+        has_docstring: r.has_docstring,
     }
 }
 
+/// Combine per-function measurements into a file-level health summary.
 pub fn aggregate(
     language: &'static str,
     path: &str,
     raw: &[RawCounts],
     fns: Vec<FnMetrics>,
+    classes: Vec<ClassMetrics>,
+    file_has_docstring: bool,
     file_loc: usize,
 ) -> FileMetrics {
     let n = fns.len() as u32;
@@ -84,6 +101,8 @@ pub fn aggregate(
         cognitive,
         halstead,
         nmi,
+        has_docstring: file_has_docstring,
         fns,
+        classes,
     }
 }
