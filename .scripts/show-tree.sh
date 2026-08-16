@@ -3,14 +3,14 @@ set -euo pipefail
 
 scope=${1:-repo}
 repo=${REPO:-.}
-assay_bin=${ASSAY_BIN:-target/release/assay}
+topo_bin=${TOPO_BIN:-target/release/topo}
 
 if ! command -v jq >/dev/null 2>&1; then
-    echo "jq is required to render the assay tree" >&2
+    echo "jq is required to render the topo tree" >&2
     exit 1
 fi
-if ! command -v "$assay_bin" >/dev/null 2>&1 && [ ! -x "$assay_bin" ]; then
-    echo "assay is required; build it or set ASSAY_BIN" >&2
+if ! command -v "$topo_bin" >/dev/null 2>&1 && [ ! -x "$topo_bin" ]; then
+    echo "topo is required; build it or set TOPO_BIN" >&2
     exit 1
 fi
 
@@ -19,7 +19,7 @@ case "$scope" in
     *) echo "usage: $0 [project|repo]" >&2; exit 2 ;;
 esac
 
-"$assay_bin" extract "$repo" | jq -sr --arg scope "$scope" '
+"$topo_bin" extract "$repo" | jq -sr --arg scope "$scope" '
   [.[] | select(.type == "file" and .path) | select($scope == "repo" or (.path | startswith("src/") or startswith("tests/") or (contains("/") | not))) | {path, desc: (.description // ""), parts: (.path | split("/"))}]
   | sort_by(.path)
   | reduce .[] as $file (

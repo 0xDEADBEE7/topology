@@ -1,6 +1,6 @@
-# Writing assay-friendly code
+# Writing topo-friendly code
 
-Assay exposes topology through file and symbol descriptions. Clear documentation makes the first inspection useful without opening source files.
+Topo exposes topology through file and symbol descriptions. Clear documentation makes the first inspection useful without opening source files.
 
 ## Describe responsibility, not mechanics
 
@@ -55,7 +55,7 @@ Use signatures and tests for detail. Use docstrings to provide orientation and i
 A good file name says where to look. A good docstring says why it exists. A good symbol name says what to search for. Together they let a reader move through the progressive workflow:
 
 ```text
-assay ./src → assay ./src/extract.rs → assay ./src/extract.rs::records
+topo ./src → topo ./src/extract.rs → topo ./src/extract.rs::records
 ```
 
 Documentation should make each step more informative without requiring a source dump.

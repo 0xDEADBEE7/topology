@@ -20,7 +20,7 @@ index: build
 	@bash .scripts/index.sh $(REPO)
 
 extract: build
-	@target/release/assay extract $(REPO)
+	@target/release/topo extract $(REPO)
 
 metrics:
 	@.scripts/metrics.sh

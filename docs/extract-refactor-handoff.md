@@ -2,7 +2,7 @@
 
 ## Objective
 
-Finish the structural refactor requested in the extraction complexity issue. The target is a small barrel module with single-responsibility submodules and green Assay metrics for every resulting file.
+Finish the structural refactor requested in the extraction complexity issue. The target is a small barrel module with single-responsibility submodules and green Topo metrics for every resulting file.
 
 ## Current state
 
@@ -17,7 +17,7 @@ Working tree is clean. Tests pass.
 Current command:
 
 ```text
-assay score ./src/extract.rs --detail --all-metrics --no-colour
+topo score ./src/extract.rs --detail --all-metrics --no-colour
 ```
 
 Current `src/extract.rs` score:
@@ -30,7 +30,7 @@ Current `src/extract.rs` score:
 | Halstead volume | 6518 |
 | NMI | 0.0 |
 
-The model extraction reduced the file from 724 to 654 LoC, but the file remains well above every structural threshold. The goal is not merely to reduce the line count: move responsibilities into modules so Assay evaluates each file independently.
+The model extraction reduced the file from 724 to 654 LoC, but the file remains well above every structural threshold. The goal is not merely to reduce the line count: move responsibilities into modules so Topo evaluates each file independently.
 
 ## Remaining boundaries
 
@@ -101,8 +101,8 @@ Follow `docs/code-style.md`: every module needs a `//!` responsibility descripti
 cargo fmt --all
 cargo test --quiet
 cargo check --quiet
-assay score ./src/extract.rs --detail --all-metrics --no-colour
-assay score ./src/extract/* --detail --all-metrics --no-colour
+topo score ./src/extract.rs --detail --all-metrics --no-colour
+topo score ./src/extract/* --detail --all-metrics --no-colour
 cargo run --quiet -- extract . >/dev/null
 cargo run --quiet -- find records
 ```
@@ -115,5 +115,5 @@ Clippy has unrelated pre-existing failures in `src/table.rs` and `src/main.rs`; 
 - No extraction function exceeds 60 LoC; no function has red complexity.
 - All extraction modules have module documentation and public items are documented.
 - `cargo test --quiet`, `cargo check --quiet`, formatting, and extraction smoke tests pass.
-- Assay output and serialized extraction behavior remain compatible.
+- Topo output and serialized extraction behavior remain compatible.
 - Commit the completed refactor as one or more concise cohesive commits.

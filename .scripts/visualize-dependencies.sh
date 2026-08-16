@@ -12,7 +12,7 @@ command -v "$fig_bin" >/dev/null 2>&1 || { echo "fig is required" >&2; exit 1; }
 files=$(STASH_DIR="$stash_dir" "$stash_bin" get type=file | jq -s '.')
 imports=$(STASH_DIR="$stash_dir" "$stash_bin" get type=import | jq -s '.')
 
-figure=$(mktemp "${TMPDIR:-/tmp}/assay-dependencies.XXXXXX.json")
+figure=$(mktemp "${TMPDIR:-/tmp}/topo-dependencies.XXXXXX.json")
 trap 'rm -f "$figure"' EXIT
 
 jq -n --argjson files "$files" --argjson imports "$imports" '

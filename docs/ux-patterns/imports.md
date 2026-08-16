@@ -27,6 +27,6 @@ STASH_DIR=/path/to/repo/.stash stash get type=import \
     '
 ```
 
-Use this after [overview](./overview.md) to understand module boundaries. Use `assay find` to locate a symbol and pass the resulting path to direct inspection.
+Use this after [overview](./overview.md) to understand module boundaries. Use `topo find` to locate a symbol and pass the resulting path to direct inspection.
 
 Resolution is adapter-dependent. Unresolved imports still remain useful as an external-dependency inventory.

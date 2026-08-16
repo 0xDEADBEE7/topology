@@ -64,12 +64,12 @@ fn analyse(path: &str) -> Option<metrics::FileMetrics> {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: assay <path|path::symbol>");
-    eprintln!("       assay find <symbol>");
+    eprintln!("usage: topo <path|path::symbol>");
+    eprintln!("       topo find <symbol>");
     eprintln!(
-        "       assay score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]"
+        "       topo score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]"
     );
-    eprintln!("       assay extract <dir>");
+    eprintln!("       topo extract <dir>");
     std::process::exit(1);
 }
 

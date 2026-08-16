@@ -10,7 +10,7 @@ command -v "$fig_bin" >/dev/null 2>&1 || { echo "fig is required" >&2; exit 1; }
 
 functions=$(STASH_DIR="$stash_dir" "$stash_bin" get type=function | jq -s '.')
 
-figure=$(mktemp "${TMPDIR:-/tmp}/assay-hotspots.XXXXXX.json")
+figure=$(mktemp "${TMPDIR:-/tmp}/topo-hotspots.XXXXXX.json")
 trap 'rm -f "$figure"' EXIT
 
 jq -n --argjson functions "$functions" '

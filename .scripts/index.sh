@@ -11,4 +11,4 @@ if ! command -v stash >/dev/null 2>&1; then
 fi
 
 mkdir -p "$stash_dir"
-"target/release/assay" extract "$repo" | STASH_DIR="$stash_dir" stash set
+"target/release/topo" extract "$repo" | STASH_DIR="$stash_dir" stash set
