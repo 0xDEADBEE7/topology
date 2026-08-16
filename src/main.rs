@@ -40,17 +40,14 @@ fn collect_paths(path: &str, files: &mut Vec<String>) {
 }
 
 fn analyse(path: &str) -> Option<metrics::FileMetrics> {
+    let adapter = match adapters::for_path(path) {
+        Ok(adapter) => adapter,
+        Err(_) => return None,
+    };
     let src = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error reading {path}: {e}");
-            return None;
-        }
-    };
-    let adapter = match adapters::for_path(path) {
-        Ok(adapter) => adapter,
-        Err(e) => {
-            eprintln!("{path}: {e}");
             return None;
         }
     };
@@ -64,17 +61,20 @@ fn analyse(path: &str) -> Option<metrics::FileMetrics> {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: topo <path|path::symbol>");
+    eprintln!("usage: topo [--full-docstring] <path|path::symbol>");
     eprintln!("       topo find <symbol>");
-    eprintln!(
-        "       topo score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]"
-    );
+    eprintln!("       topo score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]");
     eprintln!("       topo extract <dir>");
     std::process::exit(1);
 }
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
+    let full_docstring = args.iter().any(|arg| arg == "--full-docstring");
+    let args: Vec<String> = args
+        .into_iter()
+        .filter(|arg| arg != "--full-docstring")
+        .collect();
     match args.first().map(String::as_str) {
         Some("extract") => {
             let root = args.get(1).cloned().unwrap_or_else(|| ".".to_owned());
@@ -106,7 +106,7 @@ fn main() {
         Some("score") => score(&args[1..]),
         Some("tree") => {
             let target = args.get(1).map(String::as_str).unwrap_or(".");
-            if let Err(error) = tree::inspect(target) {
+            if let Err(error) = tree::inspect_with_options(target, full_docstring) {
                 eprintln!("error: {error}");
                 std::process::exit(1);
             }
@@ -114,7 +114,7 @@ fn main() {
         }
         _ => {
             let target = args.first().map(String::as_str).unwrap_or_else(|| usage());
-            if let Err(error) = tree::inspect(target) {
+            if let Err(error) = tree::inspect_with_options(target, full_docstring) {
                 eprintln!("error: {error}");
                 std::process::exit(1);
             }

@@ -14,7 +14,7 @@ pub(super) fn imports(
     source
         .lines()
         .enumerate()
-        .flat_map(|(index, line)| parse_line(language, line, index + 1))
+        .flat_map(|(index, line)| parse(language, line, index + 1))
         .enumerate()
         .map(|(ordinal, mut import)| {
             import.id = format!("{}#import:{}:{}", relative, import.line, ordinal);
@@ -39,9 +39,6 @@ pub(super) fn imports(
 }
 
 pub(super) fn parse(language: &str, line: &str, line_number: usize) -> Vec<ImportRecord> {
-    parse_line(language, line, line_number)
-}
-fn parse_line(language: &str, line: &str, line_number: usize) -> Vec<ImportRecord> {
     let text = line.trim();
     let entries = if language == "rust" && text.starts_with("use ") {
         rust_entries(text)
