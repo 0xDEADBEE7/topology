@@ -27,14 +27,20 @@ fn run_directory(root: &str) -> Result<(), String> {
         })
         .max()
         .unwrap_or(0);
-    println!("{root_name}/");
+    if let Some(description) = read_docstring(Path::new(root)) {
+        print_entry(&format!("{root_name}/"), Some(description), max_prefix);
+    } else {
+        println!("{root_name}/");
+    }
     let mut seen = BTreeSet::new();
     for (path, description) in files {
         let parts: Vec<_> = path.split('/').collect();
         let depth = parts.len().saturating_sub(1);
         for index in 0..depth {
             if seen.insert(parts[..=index].join("/")) {
-                println!("{}{}/", "  ".repeat(index + 1), parts[index]);
+                let prefix = format!("{}{}/", "  ".repeat(index + 1), parts[index]);
+                let doc = directory_doc(root, &parts, index);
+                print_entry(&prefix, doc, max_prefix);
             }
         }
         let prefix = format!(
@@ -45,6 +51,21 @@ fn run_directory(root: &str) -> Result<(), String> {
         print_entry(&prefix, description, max_prefix);
     }
     Ok(())
+}
+
+fn directory_doc(root: &str, parts: &[&str], index: usize) -> Option<String> {
+    let path = Path::new(root).join(parts[..=index].join("/"));
+    read_docstring(&path)
+}
+
+fn read_docstring(directory: &Path) -> Option<String> {
+    let content = fs::read_to_string(directory.join(".docstring")).ok()?;
+    content
+        .lines()
+        .next()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
 }
 
 fn show_file(path: &str) -> Result<(), String> {
