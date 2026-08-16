@@ -108,6 +108,5 @@ A hotspot is a prioritization hint, not proof of a defect. It is a useful first 
 
 - Prefer outlines over whole-file dumps.
 - Run one narrow command at a time and use its path/range as the next command.
-- Treat `stash` records as snapshots.
 - Unsupported files such as Markdown can appear in repository context, but direct inspection is for supported source languages.
 - If a symbol is not found, check spelling, try compound-name variants, or inspect the containing file outline.
