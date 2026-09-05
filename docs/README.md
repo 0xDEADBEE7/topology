@@ -1,6 +1,3 @@
-# TOPOLOGY
-
----
 ```text
 
                             T O P O L O G Y
@@ -28,7 +25,7 @@ Topo is built for progressive inspection: start with the repository shape, narro
 
 ---
 
-## Quickstart
+# Quickstart
 
 Build the CLI and inspect the current project:
 
@@ -54,7 +51,7 @@ cargo check --quiet
 
 ---
 
-## Documentation
+# Documentation
 
 - [UX patterns](./ux-patterns/README.md)
 - [User patterns](./ux-patterns/user-patterns.md)
