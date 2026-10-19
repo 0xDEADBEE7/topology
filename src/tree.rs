@@ -21,15 +21,10 @@ fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
         .and_then(|n| n.to_str())
         .unwrap_or(root);
     let entries = tree_entries(root, files);
-    let max_prefix = entries
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| {
-            render_prefix(index, entry, &entries).chars().count()
-                + entry.parts.last().map_or(0, String::len)
-        })
-        .max()
-        .unwrap_or_else(|| root_name.chars().count() + 1);
+    let max_prefix = align_width(entries.iter().enumerate().map(|(index, entry)| {
+        render_prefix(index, entry, &entries).chars().count()
+            + entry.parts.last().map_or(0, |name| name.chars().count())
+    }));
     if let Some(description) = read_docstring(Path::new(root)) {
         print_entry(
             &format!("{root_name}/"),
@@ -75,21 +70,26 @@ fn read_docstring(directory: &Path) -> Option<String> {
 /// Displays a file description and its declaration outline.
 fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
     let (description, symbols) = crate::extract::file_outline(path)?;
-    let name = path;
-    print_entry(name, description, name.len(), full_docstring);
-    for symbol in symbols {
-        let prefix = format!(
-            "  {} (L{}–{})",
-            symbol.name, symbol.lines[0], symbol.lines[1]
-        );
-        print_entry(
-            &prefix,
-            symbol.description,
-            name.len() + 2 + symbol.name.len(),
-            full_docstring,
-        );
+    let rows: Vec<_> = symbols
+        .into_iter()
+        .map(|s| {
+            (
+                format!("  {} (L{}–{})", s.name, s.lines[0], s.lines[1]),
+                s.description,
+            )
+        })
+        .collect();
+    let width = align_width(rows.iter().map(|(prefix, _)| prefix.chars().count()));
+    print_entry(path, description, width, full_docstring);
+    for (prefix, description) in rows {
+        print_entry(&prefix, description, width, full_docstring);
     }
     Ok(())
+}
+
+/// Picks the description column, ignoring entries too long to align with the rest.
+fn align_width(widths: impl Iterator<Item = usize>) -> usize {
+    widths.filter(|width| *width <= 40).max().unwrap_or(0)
 }
 
 /// Displays the source of a declaration found in the named file only.
@@ -123,8 +123,9 @@ fn print_entry(
         Some(description) => {
             let separator_width = target_width.saturating_sub(prefix.chars().count()).max(2);
             let separator = format!("  #{} ", "─".repeat(separator_width));
-            let available =
-                78usize.saturating_sub(prefix.chars().count() + separator.chars().count());
+            let available = 78usize
+                .saturating_sub(prefix.chars().count() + separator.chars().count())
+                .max(24);
             let description = if full_docstring {
                 description
             } else {

@@ -181,6 +181,10 @@ fn tree_descriptions_skip_licenses_pragmas_and_headings() {
     );
     project.write("flags.rs", "//!\n//! Parses flags.\nfn main() {}");
     project.write("empty.ts", "/**\n */\nexport const x = 1;");
+    project.write(
+        "a_file_name_long_enough_to_push_every_other_description_off_the_screen.rs",
+        "fn f() {}",
+    );
     let output = Command::new(env!("CARGO_BIN_EXE_topo"))
         .arg(&project.0)
         .output()
