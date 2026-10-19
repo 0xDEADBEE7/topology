@@ -59,8 +59,9 @@ names; other callbacks fold into their parent. Names read:
 - the binding for components and handlers, including through `memo` and `forwardRef`;
 - `callee("label")` for a callback passed after a string, such as `it("undoes")` or
   `app.get("/users")`, with call arguments elided (`describe.each(…)("adds %i")`);
-- `callee(…)` for an unlabelled top-level callback, and `default` for an anonymous
-  default export.
+- `callee(…)` for an unlabelled top-level callback, `default` for an anonymous default
+  export, and `<anonymous>` for any other top-level function nothing names, such as one
+  invoked immediately.
 
 Functions in objects, decorators, heritage clauses and static blocks are not class
 members.

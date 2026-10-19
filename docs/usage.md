@@ -9,7 +9,7 @@ topo --help | --version
 ```
 
 Paths default to the working directory. Colour is used only on a terminal and never when
-`NO_COLOR` is set.
+`NO_COLOR` is set to a non-empty value.
 
 ## Read a repository progressively
 
@@ -20,14 +20,14 @@ command:
 topo .                       repository shape with each file's description
 topo src/walk.rs             the file's description and its declarations with line ranges
 topo src/walk.rs::increment  one declaration's source
-topo find increment          where a name is declared, as path::name (Lstart–end)
+topo find increment          where a name is declared, as path::name [kind] (Lstart–end)
 ```
 
 - Outlines are not source dumps: pick one or two declarations, then read only those.
 - `find` matches the full name (`Walker::increment`), its last segment (`increment`), or
-  `path::name` with or without the extension (`src/walk::Walker::increment`). Search is
-  exact, so try compound variants (`import`, `imports`, `resolve_import`) or browse the
-  file outline when a guess finds nothing.
+  the path and full name, with or without the extension (`src/walk::Walker::increment`,
+  not `src/walk::increment`). Search is exact, so try compound variants (`import`,
+  `imports`, `resolve_import`) or browse the file outline when a guess finds nothing.
 - `file::symbol` looks only in that file and shows every declaration named exactly
   `symbol` (two `fmt` impls, say). With no exact match it shows the one declaration whose
   last segment matches, and when several or none do it lists the candidates instead.
@@ -42,7 +42,7 @@ topo find increment          where a name is declared, as path::name (Lstart–e
 |---|---|
 | 0 | The command succeeded; for `find` and `file::symbol`, something matched. |
 | 1 | Nothing matched: `find` found no declaration, or `file::symbol` found none or several candidates (listed under an `N matches for` line). |
-| 2 | A usage error (unknown option, extra or missing argument, or an argument that is not Unicode) or a failure such as an unreadable named path, an unsupported file to inspect, or no supported files to score. |
+| 2 | A usage error (unknown option, extra or missing argument, or an argument that is not Unicode) or a failure: a named path that does not exist or a directory that cannot be listed, a file to inspect that cannot be read or is not supported, or nothing left to score. |
 
 Help (`--help` or `-h`, anywhere) and the version print to stdout and exit 0. Results and
 match counts go to stdout; warnings and errors go to stderr, prefixed `warning:` or
@@ -51,8 +51,9 @@ match counts go to stdout; warnings and errors go to stderr, prefixed `warning:`
 ## What topo reads
 
 Supported files are `.rs`, `.py`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`
-and `.cjs`. TypeScript and TSX use their own grammars and JavaScript uses the TSX grammar;
-nothing from the project is installed or run.
+and `.cjs`. TypeScript and TSX use their own grammars and JavaScript uses the TSX grammar.
+Nothing from the project is installed or run; topo only runs git to list the files, with
+the repository's file monitor hook turned off.
 
 A directory scan takes the files git tracks or would track there
 (`git ls-files -co --exclude-standard`), or every file a walk finds outside a repository.
@@ -62,7 +63,7 @@ Either way it leaves out hidden entries, symbolic links, dependency and install 
 (`*.min.js`); `bin` and `build` are scanned, since they often hold sources. `score` also
 leaves out tests, mocks and stories unless `--tests` is given: `test`, `tests`,
 `__tests__`, `__mocks__` and `e2e` folders, `*.test.*`, `*.spec.*`, `*.stories.*`,
-`test_*.py`, `*_test.py` and `conftest.py`.
+`*.story.*`, `test_*` in any language, `*_test.py` and `conftest.py`.
 
 A path named on the command line is always read: a directory even when its name is
 excluded, ignored or a symbolic link, and a file whatever its name (score, find and extract
@@ -70,8 +71,11 @@ warn and skip one in an unsupported language; inspecting it is an error). A file
 through several spellings is read once, under the first.
 
 A file with syntax errors is measured from tree-sitter's recovered tree, with a warning
-naming it; the score table marks it `~` and extract records `parse_errors`. A file or
-directory that cannot be read is skipped with a warning (the tree leaves it out).
+naming it; the score table marks it `~` and extract records `parse_errors`. Score, find,
+extract and the tree skip a file or directory that cannot be read with a warning, even a
+named file; in a repository, git skips a directory it cannot open without one. A file
+nested tens of thousands of levels deep, which only generators write, overflows topo's
+stack and aborts the run.
 
 ### Descriptions
 
@@ -80,7 +84,8 @@ before its first code, past shebangs, inner attributes and directives such as
 `'use client'`. A declaration's is the doc comment above it, past attributes, decorators
 and plain comments, or the docstring opening its body (never an f-string or bytes
 literal). A description is the first paragraph of prose up to its first `@` tag; plain
-comments, tag-only JSDoc, license blocks and reStructuredText titles describe nothing.
+comments, tag-only JSDoc, license blocks and reStructuredText titles describe nothing,
+while a Markdown heading such as `# Safety` is kept as written.
 A directory's description is the first line of its `.docstring` file. The score's Doc
 column marks exactly what has a description.
 
@@ -120,5 +125,8 @@ the class, impl or trait whose name qualifies the declaration.
    bindings, structures and the other tables documented on `Spec`.
 3. Check the kinds `walk.rs` and `syntax.rs` name themselves (calls, labels, let chains,
    strings, doc comments, exports and imports) and handle the language's equivalents.
+   `FileInfo::units` names Rust classes `struct`, and `extract.rs` resolves imports of
+   every language other than Rust and Python as scripts, so decide what the new language
+   needs there.
 4. Add a fixture with the whitepaper's examples and hand-computed scores, names and docs
    next to `tests/fixtures/rust/semantics.rs`, and run the corpus harness.

@@ -1,6 +1,6 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0–M7 done.
+Status (October 2026): M0–M8 done; released as 0.2.0.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
@@ -142,8 +142,27 @@ Status (October 2026): M0–M7 done.
   428 → 349, zustand 49 → 34, requests 37 → 22, ripgrep 110 → 92. Red shares rise
   (excalidraw 32.7% → 44.6%, zustand 12.8% → 25.9%, requests 10.2% → 21.6%) because
   mostly green test units no longer dilute the production code's.
-- Size: `src` is 10 files and 1,420 code lines, all green. Budget 10 files and 1,500
-  code lines, the hard ceiling; yellow share 0‰.
+- M8 verify: `src` is the end state's nine files (metrics.rs moved into walk.rs). README.md
+  shows real output for every command, and `make check` fails when that output drifts;
+  docs/usage.md (commands, exit codes, discovery, records, adding a language) and
+  docs/metrics.md (definitions, deviations, cross-checks, pitfalls) replace six older
+  docs. Corpus: no aborts, `<anonymous>` at most 0.23% (excalidraw 17 of 7,428), no
+  bogus imports, no duplicate ids. Binary 5,179,088 bytes with one codegen unit (5.2 MB
+  target). topo on itself: 93 functions, 0 yellow, 0 red. CI runs `make check` on Linux
+  and macOS.
+- M8 review (27 of 32 findings confirmed; fixed unless listed): git runs with the
+  repository's file monitor hook turned off, so a scan executes nothing the checkout
+  configures; `file::symbol` on a FIFO errors instead of blocking; Rust `#[doc = ""]`
+  separators, `\n` escapes and quotes in generated docs read as rustdoc does, and doc
+  comments are collected across plain comments and attributes; TS/JS `//!` loses its
+  marker; score explains that tests need `--tests` when nothing else is left; the label
+  column is sized in characters; make targets and test.sh honour `CARGO_TARGET_DIR` and
+  any working directory, and the git-sensitive tests no longer depend on where TMPDIR
+  is. Documented instead: a file nested tens of thousands of levels deep (only
+  generators write one) overflows the stack and aborts the run; Markdown headings such
+  as `# Safety` stay descriptions; git skips unreadable directories silently.
+- Size: `src` is 9 files and 1,424 code lines, all green. Budget 9 files and 1,425 code
+  lines (the release size rounded up to the next 25); yellow share 0‰.
 
 ## 1. Recommendation
 
@@ -233,16 +252,16 @@ code. A constant changes only with the owner's approval and a reason in the comm
 
 **Final self-gate** (in `tests/cli.rs`, reading `topo extract src` and Cargo.toml):
 1. No function has `band == "red"`.
-2. Lines in yellow functions are at most `YELLOW_MAX` of all function lines. It starts at
-   the measured value and ratchets down to ≤10%.
+2. Lines in yellow functions are at most `MAX_YELLOW_PER_MILLE` of all function lines. It
+   starts at the measured value and ratchets down (0 since M2).
 3. Every file has a non-empty module doc, `parse_errors == 0` and `lines ≤ 400`, and
    stderr is empty.
-4. Total file lines ≤ `BUDGET_LINES`, with a hard ceiling of 1,500 code lines, and at most
-   10 source files.
+4. Total code lines ≤ `MAX_LINES`, with a hard ceiling of 1,500, and files ≤ `MAX_FILES`
+   (1,425 and 9 at 0.2.0).
 5. Cargo.toml has at most 5 `[dependencies]`.
-6. `tests/languages.rs` holds hand-computed fixtures so a walker bug cannot pass the gate
-   by under-counting: the Sonar whitepaper examples in Rust, TS and Python, and a 10-case
-   reducer `switch` = 1.
+6. Hand-computed fixtures in `tests/fixtures`, checked by `tests/cli.rs`, keep a walker bug
+   from passing the gate by under-counting: the Sonar whitepaper examples in Rust, TS and
+   Python, among others.
 
 **Budget ratchet:** after each milestone, set the budget to the measured size plus the next
 milestone's planned growth plus 25 lines; a milestone that plans to shrink the code counts

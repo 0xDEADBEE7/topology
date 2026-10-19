@@ -25,8 +25,9 @@
 
 topo maps a repository's shape and rates its functions, so a person or an agent can read
 the smallest part of a codebase that answers a question. It parses Rust, Python,
-TypeScript, TSX and JavaScript with tree-sitter, runs nothing from the project, and stays
-small itself: about 1,400 lines of Rust in nine files, all of them green on its own score.
+TypeScript, TSX and JavaScript with tree-sitter, runs nothing from the project (it only
+asks git which files it tracks), and stays small itself: about 1,400 lines of Rust in nine
+files, all of them green on its own score.
 
 ## Install
 
@@ -176,4 +177,4 @@ is simplified, never the limit raised.
 (excalidraw, zustand, bulletproof-react, docusaurus, requests and ripgrep): `fetch` clones
 them into `.local/corpus`, `run BIN OUT` records extract, score and tree output with a
 summary line per repository, and `diff A B` lists the files whose records changed between
-two binaries (`IGNORE='del(.field)'` drops fields first).
+two runs, writing `B/<repo>.changed` (`IGNORE='del(.field)'` drops fields first).
