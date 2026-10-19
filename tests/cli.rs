@@ -352,8 +352,15 @@ const MAX_YELLOW_PER_MILLE: u64 = 0;
 
 #[test]
 fn closed_output_pipes_end_quietly() {
+    // Far more output than a pipe buffer holds, so topo is still writing when it closes.
+    let directory = std::env::temp_dir().join(format!("topology-pipe-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let source: String = (0..5000)
+        .map(|i| format!("export function f{i}() {{}}\n"))
+        .collect();
+    std::fs::write(directory.join("big.ts"), source).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_topo"))
-        .args(["extract", "src"])
+        .args(["extract", directory.to_str().unwrap()])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -363,6 +370,7 @@ fn closed_output_pipes_end_quietly() {
         .read_line(&mut first)
         .unwrap();
     let output = child.wait_with_output().unwrap();
+    std::fs::remove_dir_all(&directory).unwrap();
     assert!(first.starts_with('{'));
     assert!(
         output.stderr.is_empty(),
