@@ -65,7 +65,7 @@ fn find(query: &str) -> Result<(), String> {
 
 /// Describes the available command forms.
 fn usage() -> String {
-    "usage: topo [--full-docstring] <path|path::symbol>\n       topo find <symbol>\n       topo score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]\n       topo extract <dir>".to_owned()
+    "usage: topo [--full-docstring] <path|path::symbol>\n       topo find <symbol>\n       topo score [--detail] [--guide] [--no-colour] <path> [...]\n       topo extract <dir>".to_owned()
 }
 
 /// Scores supported project sources, skipping files that cannot be read or parsed.
@@ -102,33 +102,18 @@ fn score(args: &[String]) -> Result<(), String> {
 fn parse_score_args(args: &[String]) -> Result<(Options, Vec<String>), String> {
     let mut options = Options::default();
     let mut paths = Vec::new();
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        if arg == "--metrics" {
-            let value = args.next().ok_or("--metrics requires a value")?;
-            options.metrics = report::parse_metrics(value)?;
-        } else if !flag(arg, &mut options)? {
-            paths.push(arg.clone());
+    for arg in args {
+        match arg.as_str() {
+            "--detail" => options.detail = true,
+            "--guide" => options.guide = true,
+            "--no-colour" | "--no-color" => options.colour = false,
+            "--help" | "-h" => return Err(usage()),
+            value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
+            path => paths.push(path.to_owned()),
         }
     }
     if paths.is_empty() {
         return Err(usage());
     }
     Ok((options, paths))
-}
-
-/// Applies a single flag, returning false for positional paths.
-fn flag(arg: &str, options: &mut Options) -> Result<bool, String> {
-    match arg {
-        "--detail" | "--functions" => options.detail = true,
-        "--guide" => options.guide = true,
-        "--all-metrics" => {
-            options.metrics = report::parse_metrics("nmi,loc,docs,cc,cognitive,halstead")?
-        }
-        "--no-colour" | "--no-color" => options.colour = false,
-        "--help" | "-h" => return Err(usage()),
-        value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
-        _ => return Ok(false),
-    }
-    Ok(true)
 }

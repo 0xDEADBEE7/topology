@@ -15,9 +15,9 @@ fn parses_typescript_functions_and_decisions() {
     assert_eq!(metrics.fns.len(), 2);
     assert_eq!(metrics.fns[0].name, "classify");
     assert_eq!(metrics.fns[0].line_start, 1);
-    assert!(metrics.fns[0].cc >= 4);
+    assert_eq!(metrics.fns[0].cognitive, 5);
     assert_eq!(metrics.fns[1].name, "render");
-    assert!(metrics.fns[1].cc >= 2);
+    assert_eq!(metrics.fns[1].cognitive, 1);
 }
 
 #[test]
@@ -27,10 +27,10 @@ fn assesses_react_components_and_jsdoc() {
     assert_eq!(metrics.fns.len(), 2);
     assert!(metrics.has_docstring);
     assert_eq!(metrics.fns[0].name, "Greeting");
-    assert_eq!(metrics.fns[0].cc, 3);
+    assert_eq!(metrics.fns[0].cognitive, 2);
     assert!(metrics.fns[0].has_docstring);
     assert_eq!(metrics.fns[1].name, "App");
-    assert_eq!(metrics.fns[1].cc, 2);
+    assert_eq!(metrics.fns[1].cognitive, 1);
     assert!(metrics.fns[1].has_docstring);
 }
 
@@ -42,9 +42,8 @@ fn nested_functions_have_independent_complexity() {
     ] {
         let metrics = TypeScriptAdapter.analyse("nested.ts", source).unwrap();
         assert_eq!(metrics.fns.len(), 2);
-        assert_eq!(metrics.fns[0].cc, 1);
-        assert_eq!(metrics.fns[1].cc, 2);
-        assert_eq!(metrics.cc, 2);
+        assert_eq!(metrics.fns[0].cognitive, 0);
+        assert_eq!(metrics.fns[1].cognitive, 1);
     }
 }
 
@@ -55,10 +54,10 @@ fn hooks_and_methods_are_assessed() {
     let metrics = TypeScriptAdapter.analyse("hooks.tsx", source).unwrap();
     assert_eq!(metrics.classes[0].name, "View");
     assert_eq!(metrics.fns.len(), 3);
-    assert_eq!(metrics.fns[0].cc, 1);
-    assert_eq!(metrics.fns[1].cc, 2);
+    assert_eq!(metrics.fns[0].cognitive, 0);
+    assert_eq!(metrics.fns[1].cognitive, 1);
     assert_eq!(metrics.fns[2].name, "render");
-    assert_eq!(metrics.fns[2].cc, 2);
+    assert_eq!(metrics.fns[2].cognitive, 1);
 }
 
 #[test]

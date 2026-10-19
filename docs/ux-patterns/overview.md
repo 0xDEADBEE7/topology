@@ -37,7 +37,7 @@ The result lists every matching definition. Pass any result back to `topo` to in
 ## 5. Score only when evaluating quality
 
 ```bash
-topo score ./src --detail --all-metrics
+topo score ./src --detail
 ```
 
 Use `score` for measurement and threshold-oriented review, not orientation. Use `topo extract` when another tool needs structured records.

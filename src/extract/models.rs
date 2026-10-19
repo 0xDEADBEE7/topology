@@ -63,22 +63,17 @@ pub(super) struct Export {
 }
 
 #[derive(Serialize)]
-/// Serializes the measurements associated with a function.
+/// Serializes a function's measurements and the band they rate it in.
 pub(super) struct SymbolMetrics {
     pub(super) loc: usize,
-    pub(super) cc: u32,
     pub(super) cognitive: u32,
-    pub(super) halstead: f64,
+    pub(super) band: &'static str,
 }
 
 #[derive(Serialize)]
-/// Serializes file-level complexity and maintainability measurements.
+/// Serializes a file's language, size, and parse status.
 pub(super) struct Metrics {
     pub(super) language: &'static str,
     pub(super) loc: usize,
-    pub(super) cc: u32,
-    pub(super) cognitive: u32,
-    pub(super) halstead: f64,
-    pub(super) nmi: f64,
     pub(super) parse_errors: usize,
 }

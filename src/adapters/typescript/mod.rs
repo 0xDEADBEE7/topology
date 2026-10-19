@@ -39,12 +39,10 @@ impl Adapter for TypeScriptAdapter {
         let mut raw = Vec::new();
         let mut classes = Vec::new();
         collect_declarations(root, source.as_bytes(), &mut raw, &mut classes);
-        let functions = raw.iter().map(metrics::compute).collect();
-        let mut file = metrics::aggregate(
+        let mut file = metrics::file(
             language,
             path,
             &raw,
-            functions,
             classes,
             crate::extract::module_doc(source).is_some(),
             source.lines().count(),

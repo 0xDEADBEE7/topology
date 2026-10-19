@@ -41,7 +41,7 @@ Find a definition or inspect one symbol:
 
 ```bash
 target/release/topo find analyse
-target/release/topo ./src/metrics.rs::compute
+target/release/topo ./src/metrics.rs::file
 ```
 
 Run the checks used during development:

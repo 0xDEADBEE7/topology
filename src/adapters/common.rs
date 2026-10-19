@@ -3,19 +3,17 @@
 mod counts;
 mod syntax;
 use crate::{metrics, visit::RawCounts};
-use counts::{close_count, decision_count, open_count, operand_count, operator_count};
+use counts::{close_count, decision_count, open_count};
 use syntax::{function_name, has_file_docstring, has_python_docstring};
 
 /// Analyse source with the lightweight line-based adapter shared by scripting languages.
 pub fn analyse_text(language: &'static str, path: &str, source: &str) -> metrics::FileMetrics {
     let raw = collect(language, source);
-    let functions = raw.iter().map(metrics::compute).collect();
     let classes = classes(language, source);
-    metrics::aggregate(
+    metrics::file(
         language,
         path,
         &raw,
-        functions,
         classes,
         has_file_docstring(language, source),
         source.lines().count(),
@@ -39,28 +37,19 @@ fn collect(language: &str, source: &str) -> Vec<RawCounts> {
                 name,
                 line_start: index + 1,
                 line_end: index + 1,
-                decisions: 1,
                 has_docstring: language == "python" && has_python_docstring(source, index),
                 ..RawCounts::default()
             });
         }
         if let Some(function) = current.as_mut() {
             function.line_end = index + 1;
-            let decisions = decision_count(language, trimmed);
-            function.decisions += decisions;
-            function.cognitive += decisions * (1 + depth);
-            function.n1 += operator_count(trimmed);
-            function.n2 += operand_count(trimmed);
+            function.cognitive += decision_count(language, trimmed) * (1 + depth);
             depth = depth.saturating_add(open_count(trimmed));
             depth = depth.saturating_sub(close_count(trimmed));
         }
     }
     if let Some(function) = current {
         raw.push(function);
-    }
-    for function in &mut raw {
-        function.dn1 = function.n1.max(1);
-        function.dn2 = function.n2.max(1);
     }
     raw
 }

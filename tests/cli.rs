@@ -26,7 +26,7 @@ fn topo(args: &[&str]) -> String {
 #[test]
 fn react_files_support_scoring_inspection_and_extraction() {
     let path = "tests/fixtures/typescript/components.tsx";
-    let score = topo(&["score", path, "--detail", "--all-metrics", "--no-colour"]);
+    let score = topo(&["score", path, "--detail", "--no-colour"]);
     assert!(score.contains("Greeting"));
     assert!(
         !topo(&["score", path]).contains('\x1b'),
@@ -35,8 +35,6 @@ fn react_files_support_scoring_inspection_and_extraction() {
     assert!(score.contains("App"));
     let outline = topo(&["--full-docstring", path]);
     assert!(outline.contains("Chooses the greeting content."));
-    let single = topo(&["extract", "tests/fixtures/typescript/basic.ts"]);
-    assert!(single.contains(r#""path":"basic.ts""#) && single.contains("classify"));
     let records = topo(&["extract", "tests/fixtures/typescript"]);
     let values: Vec<serde_json::Value> = records
         .lines()
@@ -47,10 +45,22 @@ fn react_files_support_scoring_inspection_and_extraction() {
         .any(|record| record["name"] == "Greeting" && record["language"] == "typescript"));
 }
 
+/// Pins the extract record shapes; regenerate basic.jsonl only for a deliberate change.
+#[test]
+fn extract_output_matches_its_contract() {
+    let expected = include_str!("fixtures/typescript/basic.jsonl");
+    assert_eq!(
+        topo(&["extract", "tests/fixtures/typescript/basic.ts"]),
+        expected
+    );
+}
+
 /// Size budget for `src`: lower these as the code shrinks, never raise them to pass.
-const MAX_FILES: usize = 42;
-const MAX_LINES: u64 = 2_612;
+const MAX_FILES: usize = 34;
+const MAX_LINES: u64 = 2_402;
 const MAX_DEPENDENCIES: usize = 6;
+/// Largest share of function lines in yellow functions, per mille; ratchets down.
+const MAX_YELLOW_PER_MILLE: u64 = 26;
 
 #[test]
 fn closed_output_pipes_end_quietly() {
@@ -106,7 +116,7 @@ fn partially_parsed_files_keep_their_functions() {
 #[test]
 fn project_meets_its_structural_quality_bands() {
     let records = topo(&["extract", "src"]);
-    let (mut files, mut lines) = (0, 0);
+    let (mut files, mut lines, mut function_lines, mut yellow_lines) = (0, 0, 0, 0);
     for line in records.lines() {
         let record: serde_json::Value = serde_json::from_str(line).unwrap();
         let metrics = &record["metrics"];
@@ -121,19 +131,19 @@ fn project_meets_its_structural_quality_bands() {
                 "module docs: {label}"
             );
             assert!(metrics["loc"].as_u64().unwrap() <= 400, "LoC: {label}");
+            assert_eq!(metrics["parse_errors"], 0, "partial parse: {label}");
         } else if record["type"] == "function" {
-            assert!(metrics["cc"].as_u64().unwrap() < 15, "CC: {label}");
-            assert!(
-                metrics["cognitive"].as_u64().unwrap() < 15,
-                "cognitive: {label}"
-            );
-            assert!(
-                metrics["halstead"].as_f64().unwrap() < 1000.0,
-                "Halstead: {label}"
-            );
-            assert!(metrics["loc"].as_u64().unwrap() <= 60, "LoC: {label}");
+            assert_ne!(metrics["band"], "red", "red function: {label}");
+            function_lines += metrics["loc"].as_u64().unwrap();
+            if metrics["band"] == "yellow" {
+                yellow_lines += metrics["loc"].as_u64().unwrap();
+            }
         }
     }
+    assert!(
+        1000 * yellow_lines <= MAX_YELLOW_PER_MILLE * function_lines,
+        "{yellow_lines} of {function_lines} function lines are in yellow functions"
+    );
     assert!(
         (1..=MAX_FILES).contains(&files),
         "{files} files over budget"

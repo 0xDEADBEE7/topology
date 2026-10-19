@@ -83,8 +83,8 @@ Each import record shows its source, any locally resolved path, and whether it r
 ## Use complexity to prioritize reading
 
 ```bash
-topo score --detail --all-metrics ./src
-topo score --detail --all-metrics ./src/extract/resolution.rs
+topo score ./src
+topo score --detail ./src/extract/resolution.rs
 ```
 
 A hotspot is a prioritization hint, not proof of a defect. It is a useful first read for control-flow bugs and refactors.
@@ -98,7 +98,7 @@ A hotspot is a prioritization hint, not proof of a defect. It is a useful first 
 | Fix a parser or resolver | `topo score --detail ./src`, then inspect the relevant ranges |
 | Trace a public API | file outline → exported symbol |
 | Understand a fixture | `topo ./tests`, then `topo FILE::TEST_FUNCTION` |
-| Find refactor targets | `topo score --detail --all-metrics ./src`, then inspect the ranges |
+| Find refactor targets | `topo score ./src`, then inspect the yellow and red functions it lists |
 
 ## Keep output high-signal
 

@@ -15,12 +15,10 @@ impl Adapter for RustAdapter {
     fn analyse(&self, path: &str, source: &str) -> Result<metrics::FileMetrics, String> {
         let file = syn::parse_file(source).map_err(|error| format!("parse error: {error}"))?;
         let (raw, classes, file_has_docstring) = visit::collect(&file);
-        let functions = raw.iter().map(metrics::compute).collect();
-        Ok(metrics::aggregate(
+        Ok(metrics::file(
             self.language(),
             path,
             &raw,
-            functions,
             classes,
             file_has_docstring,
             source.lines().count(),

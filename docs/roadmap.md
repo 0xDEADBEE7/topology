@@ -1,22 +1,28 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0 and M1 done, then reviewed and fixed.
+Status (October 2026): M0, M1 and M2 done.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
 - M1 verify: no corpus aborts; partially parsed files 0/5/5/5 (bulletproof-react/
   excalidraw/zustand/docusaurus) plus 2 deliberately broken docusaurus JS fixtures;
   symbol lookup on excalidraw's 11k-line App.tsx 0.03 s; tree on 10,000 files 0.20 s;
-  0 empty descriptions; binary 4.85 MB.
-- The corpus diff was not limited to previously failing files: tree-sitter-typescript
-  0.23 parses `import.meta` differently, moving Halstead/NMI in 25 files (CC, cognitive
-  and lines unchanged), and 2 docusaurus imports with import attributes lost a
-  resolution that only worked by accident (their sources are mangled until M6).
-- Ahead of M6, relative resolution already fixes excalidraw's 31 wrong-file imports
-  and maps `.js` specifiers to TypeScript sources.
-- Python and Rust still score the Docs column with their own heuristics until M5;
-  TypeScript and JavaScript use the shared module-doc reader.
-- Size: `src` is 42 files and 2,587 lines (+49 over M0); budget 42 files, 2,612 lines.
+  0 empty descriptions; binary 4.85 MB. The corpus diff was not limited to previously
+  failing files: tree-sitter-typescript 0.23 parses `import.meta` differently (Halstead
+  moved in 25 files), and 2 docusaurus imports with import attributes lost a resolution
+  that only worked by accident (their sources are mangled until M6). Relative resolution
+  already fixes excalidraw's 31 wrong-file imports ahead of M6.
+- M2 verify: NMI, Halstead and CC are gone from code, output and JSONL; function records
+  gain `band`; every function's lines and cognitive value are unchanged on the corpus.
+  topo scores 0% red and 2.5% yellow function lines on itself (the yellow functions are
+  `leading_docs` and `parse_score_args`, the latter only because the Rust counter still
+  charges each `match` arm). On the React repos, 38–55% of function lines sit in red
+  functions; 65–94% of those lines are `<anonymous>`, and 83–99% of the anonymous ones
+  are test `describe(...)` callbacks of 700–5,000 lines (M3's test-block units and
+  decision 7 address them).
+- Python and Rust still score the Docs column with their own heuristics until M5.
+- Size: `src` is 34 files and 2,267 lines (M2 −320, beyond its −170 to −230 estimate);
+  budget 34 files, 2,402 lines (M3 plans +80 to +110), yellow share ≤ 26‰.
 
 ## 1. Recommendation
 

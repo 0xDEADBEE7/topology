@@ -1,4 +1,4 @@
-//! Supplies approximate line-oriented token and decision counts.
+//! Supplies approximate line-oriented decision and nesting counts.
 
 /// Estimates branching from control-flow words and logical operators.
 pub(super) fn decision_count(language: &str, line: &str) -> u32 {
@@ -13,21 +13,6 @@ pub(super) fn decision_count(language: &str, line: &str) -> u32 {
         .sum::<u32>()
         + line.matches("&&").count() as u32
         + line.matches("||").count() as u32
-}
-
-/// Estimates operation counts from source text.
-pub(super) fn operator_count(line: &str) -> u32 {
-    ["=", "+", "-", "*", "/", "==", "=>", "<", ">", "&&", "||"]
-        .iter()
-        .map(|operator| line.matches(operator).count() as u32)
-        .sum()
-}
-
-/// Counts identifier-like tokens as approximate operands.
-pub(super) fn operand_count(line: &str) -> u32 {
-    line.split(|c: char| !c.is_alphanumeric() && c != '_')
-        .filter(|part| !part.is_empty())
-        .count() as u32
 }
 
 /// Counts opening braces for approximate nesting.

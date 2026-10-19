@@ -1,7 +1,7 @@
 //! Discovers functions, classes, and their documentation boundaries.
 
 use super::{
-    counts::{count_node, Counts},
+    counts::cognitive,
     syntax::{is_class, is_function},
 };
 use crate::visit::RawCounts;
@@ -46,22 +46,12 @@ fn has_preceding_comment(node: Node<'_>, source: &[u8]) -> bool {
 
 /// Measures the body while retaining its declaration's source extent.
 fn count_function(node: Node<'_>, source: &[u8]) -> RawCounts {
-    let name = function_name(node, source);
-    let mut counts = Counts::default();
-    if let Some(body) = node.child_by_field_name("body") {
-        count_node(body, 0, source, &mut counts);
-    }
-
+    let body = node.child_by_field_name("body");
     RawCounts {
-        name,
+        name: function_name(node, source),
         line_start: documented_node(node).start_position().row + 1,
         line_end: node.end_position().row + 1,
-        decisions: 1 + counts.decisions,
-        cognitive: counts.cognitive,
-        n1: counts.operators,
-        n2: counts.operands,
-        dn1: counts.operators.max(1),
-        dn2: counts.operands.max(1),
+        cognitive: body.map_or(0, |body| cognitive(body, 0, source)),
         has_docstring: has_preceding_comment(documented_node(node), source),
     }
 }

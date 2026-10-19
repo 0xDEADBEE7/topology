@@ -3,7 +3,7 @@
 Assess TypeScript and JavaScript projects, including React components, with:
 
 ```bash
-cargo run --quiet -- score /path/to/project/src --detail --all-metrics --no-colour
+cargo run --quiet -- score /path/to/project/src
 cargo run --quiet -- /path/to/project/src/App.tsx
 cargo run --quiet -- extract /path/to/project
 ```
@@ -30,10 +30,26 @@ skips plain `/* */` comments, license headers, `@` pragmas, reStructuredText
 titles and directives such as `'use client'`. TypeScript and JavaScript score the
 Docs column with the same reader.
 
+`topo score` rates functions, not files. A function takes the worse of two bands
+(`topo score --guide` prints them):
+
+| Metric | Green | Yellow | Red |
+|---|---|---|---|
+| Lines | ≤ 60 | 61–70 | > 70 |
+| Cognitive complexity | ≤ 10 | 11–15 | > 15 |
+
+Each file row shows its lines and whether it has a module doc, followed by its
+yellow and red functions (`--detail` lists every function). A summary line gives
+the share of function lines in yellow and red functions and doc coverage, and `~`
+marks partially parsed files. Extracted function records carry `loc`, `cognitive`
+and `band`. Lines are physical lines until roadmap M5 counts code lines, and
+cognitive complexity still charges each `match`/`switch` arm until M3 and M5
+apply the SonarSource rules.
+
 Relative imports resolve existing TypeScript and JavaScript files and directory
 indexes. Package imports and tsconfig aliases remain unresolved. This is
 a structural assessment, not TypeScript type checking or React hook-rule linting.
-The Python fallback and Halstead token counts remain approximate.
+The Python fallback remains approximate.
 
 # Development checks
 
@@ -41,16 +57,17 @@ The Python fallback and Halstead token counts remain approximate.
 targets, unit tests, CLI integration tests, and the TypeScript smoke test.
 The integration suite extracts this project's `src` directory and enforces:
 
-- every file has a module description and at most 400 lines;
-- every function stays at or below 60 lines and below the red boundaries for CC
-  and cognitive complexity (15) and Halstead volume (1000);
+- every file has a module description, at most 400 lines and no parse errors;
+- no function is red, and the share of function lines in yellow functions stays
+  within `MAX_YELLOW_PER_MILLE`;
 - `src` stays within the project budget in `tests/cli.rs`: files, total lines
-  and dependencies.
+  and dependencies;
+- `tests/fixtures/typescript/basic.jsonl` pins the extract record shapes.
 
 Complexity limits apply to functions only. File totals mostly measure size, and
 gating them rewarded splitting cohesive code into many small files. The budget
-is lowered as the [roadmap](./roadmap.md) shrinks the code and is never raised to
-make topo pass. Yellow bands remain advisory. Documentation follows
+and the yellow share are lowered as the [roadmap](./roadmap.md) shrinks the code
+and are never raised to make topo pass. Documentation follows
 [the code style](./code-style.md): describe module responsibilities, public
 interfaces, and non-obvious helpers. Tests and routine trait implementations can
 rely on their names and contracts.

@@ -4,17 +4,12 @@ use crate::visitor::BlockVisitor;
 use syn::{spanned::Spanned, visit::Visit, File, ImplItemFn, ItemFn, ItemStruct};
 
 #[derive(Debug, Default, Clone)]
-/// Carries source locations and raw counts into metric computation.
+/// Carries a function's source location and cognitive count into metric computation.
 pub struct RawCounts {
     pub name: String,
     pub line_start: usize,
     pub line_end: usize,
-    pub decisions: u32,
     pub cognitive: u32,
-    pub n1: u32,
-    pub n2: u32,
-    pub dn1: u32,
-    pub dn2: u32,
     pub has_docstring: bool,
 }
 
@@ -38,12 +33,7 @@ impl FnVisitor {
             name: name.to_owned(),
             line_start,
             line_end,
-            decisions: 1 + bv.decisions,
             cognitive: bv.cognitive,
-            n1: bv.n1,
-            n2: bv.n2,
-            dn1: bv.n1,
-            dn2: bv.n2,
             has_docstring,
         });
     }

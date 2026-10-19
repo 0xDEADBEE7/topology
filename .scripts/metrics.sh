@@ -9,4 +9,4 @@ printf "%s  %s bytes  (%s)\n" "$METRICS_BIN" "$(wc -c < "$METRICS_BIN" | tr -d '
 
 echo ""
 echo "=== Code Health ==="
-"$METRICS_BIN" score src --detail --all-metrics
+"$METRICS_BIN" score src --detail

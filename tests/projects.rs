@@ -87,14 +87,14 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
             .count(),
         8
     );
-    for (name, language, cc) in [
-        ("config", "typescript", 1),
-        ("Menu", "javascript", 2),
-        ("legacy", "javascript", 1),
+    for (name, language, cognitive) in [
+        ("config", "typescript", 0),
+        ("Menu", "javascript", 1),
+        ("legacy", "javascript", 0),
     ] {
         assert!(records.iter().any(|record| record["name"] == name
             && record["language"] == language
-            && record["metrics"]["cc"] == cc));
+            && record["metrics"]["cognitive"] == cognitive));
     }
     let resolved = |source: &str| {
         records

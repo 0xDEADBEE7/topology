@@ -89,10 +89,6 @@ fn file_record(
         metrics: Metrics {
             language,
             loc: analysed.loc,
-            cc: analysed.cc,
-            cognitive: analysed.cognitive,
-            halstead: analysed.halstead,
-            nmi: analysed.nmi,
             parse_errors: analysed.parse_errors,
         },
     }
