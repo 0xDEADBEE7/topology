@@ -43,10 +43,9 @@ pub struct FileInfo {
 impl FileInfo {
     /// Pairs each declaration with its kind: `function`, or `class` (`struct` in Rust).
     pub fn units(&self) -> impl Iterator<Item = (&Unit, &'static str)> {
-        let class = if self.language == "rust" {
-            "struct"
-        } else {
-            "class"
+        let class = match self.language {
+            "rust" => "struct",
+            _ => "class",
         };
         let fns = self.fns.iter().map(|unit| (unit, "function"));
         fns.chain(self.classes.iter().map(move |unit| (unit, class)))

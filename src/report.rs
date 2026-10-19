@@ -65,7 +65,7 @@ impl Default for Options {
 /// Prints each file with its yellow and red functions (all functions with `detail`),
 /// then the share of function lines in each band.
 pub fn print_table(files: &[FileInfo], options: &Options) {
-    let headers = ["File", "Lines", "Cog", "Doc"].map(str::to_owned);
+    let headers = ["File", "Lines", "Cog", "Doc"];
     let mut rows = Vec::new();
     for file in files {
         let partial = if file.parse_errors > 0 { " ~" } else { "" };
@@ -73,11 +73,8 @@ pub fn print_table(files: &[FileInfo], options: &Options) {
         rows.push((format!("{}{partial}", file.path), cells, true));
         for f in &file.fns {
             if options.detail || function_band(f) != Band::Green {
-                rows.push((
-                    format!("  {} (L{}–{})", f.name, f.line_start, f.line_end),
-                    function_cells(f),
-                    false,
-                ));
+                let label = format!("  {} (L{}–{})", f.name, f.line_start, f.line_end);
+                rows.push((label, function_cells(f), false));
             }
         }
     }
@@ -130,7 +127,7 @@ fn summary(files: &[FileInfo]) -> String {
 
 /// Prints the bands that rate each function.
 pub fn print_guide(colour: bool) {
-    let headers = ["Function metric", "Green", "Yellow", "Red"].map(str::to_owned);
+    let headers = ["Function metric", "Green", "Yellow", "Red"];
     let rows = BANDS.map(|(name, green, yellow)| {
         let cells = vec![
             (format!("<= {green}"), GREEN),

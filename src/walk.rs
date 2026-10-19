@@ -8,8 +8,11 @@ use crate::{
 use std::cmp::Reverse;
 use tree_sitter::{Node, Parser};
 
-const NOTHING: &[&str] = &[];
-const BODY: &[&str] = &["body"];
+/// Names of the fields a construct nests one level deeper.
+type Fields = &'static [&'static str];
+
+const NOTHING: Fields = &[];
+const BODY: Fields = &["body"];
 
 /// Measures one source file, warning when only part of it could be parsed.
 pub fn analyse(path: &str, source: &str) -> Result<FileInfo, String> {
@@ -57,6 +60,13 @@ fn syntax_errors(node: Node<'_>) -> usize {
     let mut cursor = node.walk();
     let children = node.children(&mut cursor).filter(|child| child.has_error());
     children.map(syntax_errors).sum()
+}
+
+/// The value a table gives a node kind, such as the field naming a `pair` or the fields a
+/// structure nests.
+fn lookup<T: Copy>(table: &[(&str, T)], kind: &str) -> Option<T> {
+    let entry = table.iter().find(|(key, _)| *key == kind);
+    entry.map(|(_, value)| *value)
 }
 
 /// Walks one syntax tree using its language's table, collecting units, classes, imports
@@ -165,23 +175,20 @@ impl Walker<'_> {
     fn mark_code(&mut self, (row, start): (usize, usize), end: usize) {
         let text = self.source.get(start..end).unwrap_or_default();
         let blank = |c: char| c.is_whitespace() || "\u{200B}\u{2060}\u{FEFF}".contains(c);
-        for (offset, line) in text.split('\n').enumerate() {
-            let row = self.code.get_mut(row + offset);
-            if let Some(code) = row.filter(|_| !line.trim_matches(blank).is_empty()) {
-                *code = true;
-            }
+        for (code, line) in self.code.iter_mut().skip(row).zip(text.split('\n')) {
+            *code |= !line.trim_matches(blank).is_empty();
         }
     }
 
-    /// Names a function by itself, its binding, or its test block; None folds a nested callback.
+    /// Names a function by itself, its binding, or the call receiving it; None folds a nested
+    /// callback.
     fn unit_name(&self, node: Node<'_>, nested: bool) -> Option<String> {
         let own = node
             .child_by_field_name("name")
             .and_then(|name| self.text(name));
         own.map(|name| self.qualify(node, name))
             .or_else(|| self.bound_name(node, nested))
-            .or_else(|| self.test_block(node))
-            .or_else(|| (!nested).then(|| self.fallback(node)))
+            .or_else(|| self.call_name(node, nested))
     }
 
     /// Follows wrappers (and, at the top level, any call) up to the binding that names `node`.
@@ -202,34 +209,29 @@ impl Walker<'_> {
         if current.kind() == "export_statement" {
             return Some("default".to_owned());
         }
-        let name = current.child_by_field_name(self.binding(current)?)?;
+        let name = current.child_by_field_name(lookup(self.spec.bindings, current.kind())?)?;
         let name = self.text(name.child_by_field_name("property").unwrap_or(name))?;
         let name = name.trim_matches(['"', '\'']);
         let simple = !name.is_empty() && !name.contains(['{', '[', ' ']);
         simple.then(|| self.qualify(current, name.to_owned()))
     }
 
-    /// Names a callback passed after a string, such as `it("undoes")` or `app.get("/users")`.
-    fn test_block(&self, node: Node<'_>) -> Option<String> {
-        let arguments = node
-            .parent()
-            .filter(|parent| parent.kind() == "arguments")?;
-        let label = (arguments.named_child(0)).filter(|first| {
+    /// Names a callback after the call receiving it and a string passed before it, such as
+    /// `it("undoes")` or `app.get("/users")`, or, outside any unit, as `describe(…)`.
+    fn call_name(&self, node: Node<'_>, nested: bool) -> Option<String> {
+        let arguments = node.parent().filter(|parent| parent.kind() == "arguments");
+        let call = arguments.and_then(|arguments| arguments.parent());
+        let callee = call.and_then(|call| self.callee(call.child_by_field_name("function")?));
+        let label = (arguments.and_then(|arguments| arguments.named_child(0))).filter(|first| {
             first.id() != node.id() && matches!(first.kind(), "string" | "template_string")
-        })?;
-        let callee = self.callee(arguments.parent()?.child_by_field_name("function")?)?;
-        let label = self.text(label)?;
-        let label = label.lines().map(str::trim).collect::<Vec<_>>().join(" ");
-        Some(format!("{callee}({label})"))
-    }
-
-    /// Names a top-level callback after the call that receives it.
-    fn fallback(&self, node: Node<'_>) -> String {
-        let call = node.parent().filter(|parent| parent.kind() == "arguments");
-        let callee = call.and_then(|call| call.parent()?.child_by_field_name("function"));
-        callee
-            .and_then(|callee| self.callee(callee))
-            .map_or_else(|| "<anonymous>".to_owned(), |callee| format!("{callee}(…)"))
+        });
+        let label = label.and_then(|label| self.text(label));
+        let label = label.map(|label| label.lines().map(str::trim).collect::<Vec<_>>().join(" "));
+        match (callee, label) {
+            (Some(callee), Some(label)) => Some(format!("{callee}({label})")),
+            (Some(callee), None) if !nested => Some(format!("{callee}(…)")),
+            _ => (!nested).then(|| "<anonymous>".to_owned()),
+        }
     }
 
     /// Renders a callee without its arguments, as in `describe.each(…)` or `app.get`.
@@ -278,13 +280,11 @@ impl Walker<'_> {
     /// expression (an object, decorator, heritage clause or static block) holds it first.
     fn scope(&self, member: Node<'_>) -> Option<String> {
         let spec = self.spec;
-        let stops = [spec.functions, spec.closures, spec.scopes, spec.detached];
+        let stops = [spec.functions, spec.closures, spec.scopes, spec.detached].concat();
         let mut ancestors = std::iter::successors(member.parent(), |node| node.parent());
-        let scope =
-            ancestors.find(|node| stops.iter().any(|kinds| kinds.contains(&node.kind())))?;
-        spec.scopes
-            .contains(&scope.kind())
-            .then(|| self.class_name(scope))
+        let scope = ancestors.find(|node| stops.contains(&node.kind()))?;
+        let scoped = spec.scopes.contains(&scope.kind());
+        scoped.then(|| self.class_name(scope))
     }
 
     /// Names a class or container by itself (qualified), its implemented type's own name, or
@@ -332,7 +332,7 @@ impl Walker<'_> {
         let method = parent
             .child_by_field_name("function")
             .is_some_and(|callee| callee.kind() == "member_expression");
-        (through || self.binding(parent).is_some())
+        (through || lookup(spec.bindings, kind).is_some())
             && match kind {
                 "arguments" => self.passes_arguments(parent, child),
                 "call_expression" if method => {
@@ -342,38 +342,18 @@ impl Walker<'_> {
             }
     }
 
-    /// The field holding the name a binding node gives, such as a `pair`'s `key`.
-    fn binding(&self, node: Node<'_>) -> Option<&'static str> {
-        let mut bindings = self.spec.bindings.iter();
-        bindings
-            .find(|(kind, _)| *kind == node.kind())
-            .map(|(_, field)| *field)
-    }
-
     /// Recognizes calls such as `memo(...)` or `React.forwardRef(...)` that wrap a component.
     fn is_wrapper_call(&self, call: Node<'_>) -> bool {
-        let callee = call
-            .child_by_field_name("function")
-            .and_then(|f| self.text(f));
-        let name = callee
-            .as_deref()
-            .map(|callee| callee.rsplit('.').next().unwrap_or(""));
-        name.is_some_and(|name| self.spec.wrapper_calls.contains(&name))
+        let function = call.child_by_field_name("function");
+        let callee = function.and_then(|f| self.text(f)).unwrap_or_default();
+        let name = callee.rsplit('.').next().unwrap_or_default();
+        self.spec.wrapper_calls.contains(&name)
     }
 
     /// Adds the increment of a structure, `if`/`else`, labelled jump or logical run to `unit`
     /// and returns the fields it nests.
-    fn increment(
-        &mut self,
-        node: Node<'_>,
-        unit: Option<usize>,
-        nesting: u32,
-    ) -> &'static [&'static str] {
+    fn increment(&mut self, node: Node<'_>, unit: Option<usize>, nesting: u32) -> Fields {
         let (spec, kind) = (self.spec, node.kind());
-        let structure = spec
-            .structures
-            .iter()
-            .find(|(structure, _)| *structure == kind);
         let [if_kind, else_kind] = spec.conditional;
         let parent_is = |kind| node.parent().is_some_and(|p| p.kind() == kind);
         let first_is = |kind| {
@@ -381,8 +361,8 @@ impl Walker<'_> {
             let mut statements = node.named_children(&mut cursor).filter(|c| !c.is_extra());
             statements.next().is_some_and(|c| c.kind() == kind)
         };
-        let (increment, nested): (u32, &[&str]) = match structure {
-            Some((_, nested)) => (1 + nesting, *nested),
+        let (increment, nested): (u32, Fields) = match lookup(spec.structures, kind) {
+            Some(nested) => (1 + nesting, nested),
             None if kind == if_kind && parent_is(else_kind) => (1, &["consequence"]),
             None if kind == if_kind => (1 + nesting, &["consequence"]),
             None if spec.elif.contains(&kind) => (1, &["consequence"]),
@@ -399,56 +379,43 @@ impl Walker<'_> {
 
     /// Recognizes a jump to a label, given as a field (TypeScript) or a child (Rust).
     fn labelled(&self, jump: Node<'_>) -> bool {
-        jump.child_by_field_name("label").is_some()
-            || jump
-                .named_child(0)
-                .is_some_and(|child| child.kind() == "label")
+        let first = jump.named_child(0).map(|child| child.kind());
+        jump.child_by_field_name("label").is_some() || first == Some("label")
     }
 
     /// Counts runs of like logical operators in the expression rooted here (`a && b || c` is 2).
     fn logical_sequences(&self, node: Node<'_>) -> u32 {
-        if self.logical_operator(node).is_none() {
+        if !self.is_logical(node) {
             return 0;
         }
-        let mut parent = node.parent();
-        while let Some(wrapper) = parent.filter(|p| p.kind() == "parenthesized_expression") {
-            parent = wrapper.parent();
-        }
-        if parent
-            .and_then(|parent| self.logical_operator(parent))
-            .is_some()
-        {
+        let mut ancestors = std::iter::successors(node.parent(), |node| node.parent());
+        let parent = ancestors.find(|parent| parent.kind() != "parenthesized_expression");
+        if parent.is_some_and(|parent| self.is_logical(parent)) {
             return 0;
         }
         let mut operators = Vec::new();
         self.flatten(node, &mut operators);
-        1 + operators
-            .windows(2)
-            .filter(|pair| pair[0] != pair[1])
-            .count() as u32
+        operators.dedup();
+        operators.len() as u32
     }
 
-    /// Lists the logical operators of a parenthesized logical expression in source order.
+    /// Lists the logical operators of a logical expression, through parentheses, in source
+    /// order.
     fn flatten(&self, node: Node<'_>, operators: &mut Vec<&'static str>) {
-        if self.logical_operator(node).is_none() && node.kind() != "parenthesized_expression" {
-            return;
-        }
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if self.spec.logical.contains(&child.kind()) {
                 operators.push(child.kind());
-            } else {
+            } else if self.is_logical(child) || child.kind() == "parenthesized_expression" {
                 self.flatten(child, operators);
             }
         }
     }
 
-    /// The operator of a logical expression; a Rust let chain is a run of `&&`.
-    fn logical_operator(&self, node: Node<'_>) -> Option<&'static str> {
-        if node.kind() == "let_chain" {
-            return Some("&&");
-        }
-        let operator = node.child_by_field_name("operator")?.kind();
-        self.spec.logical.contains(&operator).then_some(operator)
+    /// Recognizes a logical expression; a Rust let chain is a run of `&&`.
+    fn is_logical(&self, node: Node<'_>) -> bool {
+        let operator = node.child_by_field_name("operator");
+        let logical = operator.is_some_and(|operator| self.spec.logical.contains(&operator.kind()));
+        node.kind() == "let_chain" || logical
     }
 }

@@ -27,10 +27,9 @@ pub fn run(target: &str) -> Result<(), String> {
 /// Builds a file's record, then its imports and declarations, with ids unique in the file.
 fn records(root: &Path, file: &FileInfo) -> Vec<Value> {
     let path = &file.path;
-    let metrics =
-        json!({"language": file.language, "loc": file.loc, "parse_errors": file.parse_errors});
     let mut records = vec![json!({
-        "id": path, "type": "file", "path": path, "description": file.doc, "metrics": metrics,
+        "id": path, "type": "file", "path": path, "description": file.doc,
+        "metrics": {"language": file.language, "loc": file.loc, "parse_errors": file.parse_errors},
     })];
     for (ordinal, import) in file.imports.iter().enumerate() {
         records.push(json!({
@@ -40,10 +39,9 @@ fn records(root: &Path, file: &FileInfo) -> Vec<Value> {
             "resolved_path": resolve_import(root, path, import),
         }));
     }
-    records.extend(
-        file.units()
-            .map(|(unit, kind)| unit_record(file, unit, kind)),
-    );
+    for (unit, kind) in file.units() {
+        records.push(unit_record(file, unit, kind));
+    }
     let mut seen = HashMap::new();
     for record in &mut records {
         let id = record["id"].as_str().unwrap_or_default().to_owned();
@@ -77,10 +75,9 @@ fn resolve_import(root: &Path, current: &str, import: &Import) -> Option<String>
         Language::Python => python_candidates(directory, import),
         _ => script_candidates(&directory.join(&import.source)),
     };
-    candidates.into_iter().find_map(|candidate| {
-        let path = candidate
-            .is_file()
-            .then(|| candidate.canonicalize().ok())??;
+    let mut files = candidates.into_iter().filter(|path| path.is_file());
+    files.find_map(|file| {
+        let path = file.canonicalize().ok()?;
         Some(path.strip_prefix(root).ok()?.to_string_lossy().into_owned())
     })
 }

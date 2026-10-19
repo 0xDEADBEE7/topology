@@ -18,16 +18,12 @@ pub fn is_docstring(spec: &Spec, node: Node<'_>) -> bool {
 /// block holding it, which a doc comment sits above, such as its export or statement.
 pub fn anchor(declaration: Node<'_>) -> Node<'_> {
     let row = declaration.start_position().row;
-    let containers = [
-        "object",
-        "class_body",
-        "declaration_list",
-        "statement_block",
-        "block",
-    ];
     let same_row = |node: &Node<'_>| {
-        let container = containers.contains(&node.kind()) || node.parent().is_none();
-        node.start_position().row == row && !container
+        let container = matches!(
+            node.kind(),
+            "object" | "class_body" | "declaration_list" | "statement_block" | "block"
+        );
+        node.start_position().row == row && !container && node.parent().is_some()
     };
     let outer = std::iter::successors(Some(declaration), |node| node.parent().filter(same_row));
     outer.last().unwrap_or(declaration)
@@ -36,9 +32,7 @@ pub fn anchor(declaration: Node<'_>) -> Node<'_> {
 /// The declaration from its anchor up to its body or first comment, on one line.
 pub fn signature(source: &str, node: Node<'_>, anchor: Node<'_>) -> String {
     let body = node.child_by_field_name("body");
-    let mut cursor = node.walk();
-    let mut children = node.children(&mut cursor);
-    let end = children.find(|child| child.is_extra() || Some(*child) == body);
+    let end = (node.children(&mut node.walk())).find(|c| c.is_extra() || Some(*c) == body);
     let header = &source[anchor.start_byte()..end.map_or(node.end_byte(), |e| e.start_byte())];
     header.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -47,14 +41,10 @@ pub fn signature(source: &str, node: Node<'_>, anchor: Node<'_>) -> String {
 /// that a local `export { }` or `export default` names, `pub`, or a public top-level
 /// Python name.
 pub fn exported(declaration: Node<'_>, name: &str, exports: &[String]) -> bool {
-    let mut parent = declaration.parent();
-    if parent.is_some_and(|p| p.kind() == "decorated_definition") {
-        parent = parent.and_then(|p| p.parent());
-    }
+    let mut ancestors = std::iter::successors(declaration.parent(), Node::parent);
+    let parent = ancestors.find(|p| p.kind() != "decorated_definition");
     declaration.kind() == "export_statement"
-        || declaration
-            .child(0)
-            .is_some_and(|c| c.kind() == "visibility_modifier")
+        || declaration.child(0).map(|c| c.kind()) == Some("visibility_modifier")
         || parent.is_some_and(|p| p.kind() == "module") && !name.starts_with('_')
         || parent.is_some_and(|p| p.kind() == "program") && exports.iter().any(|e| e == name)
 }
@@ -102,17 +92,15 @@ pub fn doc(spec: &Spec, source: &str, node: Node<'_>, anchor: Node<'_>) -> Optio
 
 /// Recognizes a doc comment or attribute (`///` but not `////`, or `#[doc = "…"]`).
 fn is_doc(spec: &Spec, text: &str) -> bool {
-    let doc = |prefix: &&str| {
-        let rest = text.strip_prefix(*prefix);
+    spec.docs.iter().any(|prefix| {
+        let rest = text.strip_prefix(prefix);
         rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
-    };
-    spec.docs.iter().any(doc)
+    })
 }
 
 /// Summarizes the docstring that opens a Python body or module.
 fn docstring(spec: &Spec, source: &str, body: Node<'_>) -> Option<String> {
-    let mut cursor = body.walk();
-    let first = body.named_children(&mut cursor).find(|s| !s.is_extra())?;
+    let first = (body.named_children(&mut body.walk())).find(|s| !s.is_extra())?;
     let doc = is_docstring(spec, first) && !formatted(source, first);
     doc.then(|| summary(&doc_text(source, first)))?
 }
@@ -130,9 +118,8 @@ pub fn module_doc(spec: &Spec, source: &str, root: Node<'_>) -> Option<String> {
     if spec.docs.is_empty() {
         return docstring(spec, source, root);
     }
-    let mut cursor = root.walk();
     let mut text = String::new();
-    for child in root.named_children(&mut cursor) {
+    for child in root.named_children(&mut root.walk()) {
         let code = &source[child.byte_range()];
         if ["//!", "/*!", "/**"]
             .iter()
@@ -154,43 +141,39 @@ fn doc_text(source: &str, node: Node<'_>) -> String {
         "comment" if summary(text).is_none() => String::new(),
         "comment" => format!("{text}\n\n"),
         "doc_comment" | "string_content" => format!("{text}\n"),
-        _ => {
-            let mut cursor = node.walk();
-            let parts = node.named_children(&mut cursor);
-            parts.map(|part| doc_text(source, part)).collect()
-        }
+        _ => (node.named_children(&mut node.walk()))
+            .map(|part| doc_text(source, part))
+            .collect(),
     }
 }
 
 /// Recognizes what may precede a module doc: shebangs, inner attributes and directives
 /// such as `'use client'`.
 fn preamble(node: Node<'_>) -> bool {
-    let first = node.named_child(0).map(|child| child.kind());
-    matches!(
-        node.kind(),
-        "hash_bang_line" | "shebang" | "inner_attribute_item"
-    ) || node.kind() == "expression_statement" && first == Some("string")
+    match node.kind() {
+        "expression_statement" => node.named_child(0).is_some_and(|c| c.kind() == "string"),
+        kind => matches!(kind, "hash_bang_line" | "shebang" | "inner_attribute_item"),
+    }
 }
 
 /// Joins the first paragraph up to its tags (`@param`), past a reStructuredText title
 /// and comment markers; None when that paragraph is a license or only tags.
 fn summary(text: &str) -> Option<String> {
-    let lines: Vec<&str> = text
-        .lines()
-        .map(|line| {
-            let line = line.trim();
-            let marker = ["/**/", "/**", "/*!", "* "]
-                .iter()
-                .find_map(|m| line.strip_prefix(m));
-            let line = marker.unwrap_or(if line == "*" { "" } else { line });
-            line.trim_end_matches("*/").trim()
-        })
-        .collect();
+    let lines: Vec<&str> = text.lines().map(unmarked).collect();
     let mut paragraphs = lines.split(|line| line.is_empty());
     let paragraph = paragraphs.find(|p| !p.is_empty() && !is_heading(p))?;
     let prose = paragraph.iter().take_while(|line| !line.starts_with('@'));
     let prose: Vec<&str> = prose.copied().collect();
     (!license(paragraph) && !prose.is_empty()).then(|| prose.join(" "))
+}
+
+/// A line without its comment markers (`/**`, `/*!`, `*`, `*/`) or surrounding space.
+fn unmarked(line: &str) -> &str {
+    let line = line.trim();
+    let markers = ["/**/", "/**", "/*!", "* "];
+    let marker = markers.iter().find_map(|m| line.strip_prefix(m));
+    let line = marker.unwrap_or(if line == "*" { "" } else { line });
+    line.trim_end_matches("*/").trim()
 }
 
 /// Recognizes a license paragraph, which never describes code.
@@ -227,7 +210,7 @@ pub fn imports(node: Node<'_>, source: &str, list: &mut Vec<Import>) {
         });
     }
     match node.kind() {
-        "import_statement" | "import_from_statement" => python_imports(node, source, list),
+        "import_statement" | "import_from_statement" => python_imports(node, line, source, list),
         "use_declaration" => {
             let tree = node.child_by_field_name("argument");
             tree.into_iter()
@@ -241,26 +224,20 @@ pub fn imports(node: Node<'_>, source: &str, list: &mut Vec<Import>) {
 fn called<'t>(call: Node<'t>, source: &str) -> Option<Node<'t>> {
     let callee = &source[call.child(0)?.byte_range()];
     let arguments = call.child_by_field_name("arguments")?;
-    let mut cursor = arguments.walk();
-    let first = arguments
-        .named_children(&mut cursor)
-        .find(|a| a.kind() != "comment");
+    let first = (arguments.named_children(&mut arguments.walk())).find(|a| a.kind() != "comment");
     first.filter(|_| matches!(callee, "import" | "require"))
 }
 
 /// Python `import a.b as c` and `from ..a import b, *`: one import per name, keeping the
 /// module's leading dots.
-fn python_imports(node: Node<'_>, source: &str, list: &mut Vec<Import>) {
+fn python_imports(node: Node<'_>, line: usize, source: &str, list: &mut Vec<Import>) {
     let text = |node: Node<'_>| source[node.byte_range()].to_owned();
-    let line = node.start_position().row + 1;
     let module = node.child_by_field_name("module_name").map(text);
     let wildcard = text(node).ends_with('*').then(|| "*".to_owned());
     let mut cursor = node.walk();
     let names = node.children_by_field_name("name", &mut cursor);
-    for name in names
-        .map(|n| text(n.child_by_field_name("name").unwrap_or(n)))
-        .chain(wildcard)
-    {
+    let names = names.map(|n| text(n.child_by_field_name("name").unwrap_or(n)));
+    for name in names.chain(wildcard) {
         let (source, name) = match &module {
             Some(module) => (module.clone(), Some(name)),
             None => (name, None),
@@ -282,8 +259,7 @@ fn use_tree(node: Node<'_>, prefix: &str, line: usize, source: &str, list: &mut 
     };
     match node.kind() {
         "use_list" => {
-            let mut cursor = node.walk();
-            for child in node.named_children(&mut cursor) {
+            for child in node.named_children(&mut node.walk()) {
                 use_tree(child, prefix, line, source, list);
             }
         }

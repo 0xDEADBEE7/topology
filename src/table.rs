@@ -23,22 +23,14 @@ fn truncate_left(s: &str, width: usize) -> String {
 }
 
 /// Prints aligned rows, optionally separating file groups.
-pub fn print(headers: &[String], rows: &[Row], colour: bool, separate_files: bool) {
+pub fn print(headers: &[&str], rows: &[Row], colour: bool, separate_files: bool) {
     let widths = column_widths(headers, rows);
     let border = |left: &str, join: &str, right: &str| {
-        format!(
-            "{left}{}{right}",
-            widths
-                .iter()
-                .map(|w| format!("{}{}", "─".repeat(*w + 2), join))
-                .collect::<String>()
-                .trim_end_matches(join)
-        )
+        let lines: Vec<_> = widths.iter().map(|w| "─".repeat(w + 2)).collect();
+        format!("{left}{}{right}", lines.join(join))
     };
-    let top = border("┌", "┬", "┐");
     let middle = border("├", "┼", "┤");
-    let bottom = border("└", "┴", "┘");
-    println!("{top}");
+    println!("{}", border("┌", "┬", "┐"));
     let header: Vec<_> = (headers.iter().zip(&widths))
         .map(|(header, width)| format!("{header:<width$}"))
         .collect();
@@ -50,40 +42,32 @@ pub fn print(headers: &[String], rows: &[Row], colour: bool, separate_files: boo
         }
         println!("│ {} │", cells(row, &widths, colour).join(" │ "));
     }
-    println!("{bottom}");
+    println!("{}", border("└", "┴", "┘"));
 }
 
 /// Formats one row to the column widths, colouring metric values when asked.
 fn cells((label, values, _): &Row, widths: &[usize], colour: bool) -> Vec<String> {
     let mut cells = vec![truncate_left(label, widths[0])];
-    for (i, (value, colour_code)) in values.iter().enumerate() {
-        let padded = format!("{value:>width$}", width = widths[i + 1]);
+    for ((value, colour_code), width) in values.iter().zip(&widths[1..]) {
+        let padded = format!("{value:>width$}");
         cells.push(if colour {
             format!("{colour_code}{padded}{RESET}")
         } else {
             padded
         });
     }
-    while cells.len() < widths.len() {
-        cells.push(" ".repeat(widths[cells.len()]));
-    }
     cells
 }
 
 /// Fits the label column around the space required by metric values.
-fn column_widths(headers: &[String], rows: &[Row]) -> Vec<usize> {
-    let mut widths: Vec<usize> = (0..headers.len())
-        .map(|i| {
-            let values = rows.iter().map(|r| {
-                if i == 0 {
-                    r.0.len()
-                } else {
-                    r.1.get(i - 1).map(|v| v.0.len()).unwrap_or(0)
-                }
-            });
-            headers[i].len().max(values.max().unwrap_or(0))
-        })
-        .collect();
+fn column_widths(headers: &[&str], rows: &[Row]) -> Vec<usize> {
+    let mut widths: Vec<usize> = headers.iter().map(|header| header.len()).collect();
+    for (label, values, _) in rows {
+        widths[0] = widths[0].max(label.len());
+        for (width, (value, _)) in widths[1..].iter_mut().zip(values) {
+            *width = (*width).max(value.len());
+        }
+    }
     const MAX_TABLE_WIDTH: usize = 78;
     let metric_width: usize = widths.iter().skip(1).sum();
     let label_limit = MAX_TABLE_WIDTH.saturating_sub(3 * headers.len() + metric_width + 1);

@@ -6,7 +6,6 @@
 //! strings, doc comments, exports and imports).
 
 use std::path::Path;
-use tree_sitter_typescript::{LANGUAGE_TSX, LANGUAGE_TYPESCRIPT};
 
 /// A supported source language.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -55,8 +54,8 @@ impl Language {
         match self {
             Self::Rust => (tree_sitter_rust::LANGUAGE.into(), &RUST),
             Self::Python => (tree_sitter_python::LANGUAGE.into(), &PYTHON),
-            Self::TypeScript => (LANGUAGE_TYPESCRIPT.into(), &ECMA),
-            Self::Tsx | Self::JavaScript => (LANGUAGE_TSX.into(), &ECMA),
+            Self::TypeScript => (tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(), &ECMA),
+            Self::Tsx | Self::JavaScript => (tree_sitter_typescript::LANGUAGE_TSX.into(), &ECMA),
         }
     }
 }
