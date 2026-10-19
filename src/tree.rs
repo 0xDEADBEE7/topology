@@ -47,14 +47,11 @@ fn run_directory(root: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Reads a directory's description: the first line of its `.docstring` file.
 fn read_docstring(directory: &Path) -> Option<String> {
     let content = fs::read_to_string(directory.join(".docstring")).ok()?;
-    content
-        .lines()
-        .next()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
+    let line = content.lines().next()?.trim();
+    (!line.is_empty()).then(|| line.to_owned())
 }
 
 /// Displays a file description and its declaration outline.
@@ -89,36 +86,34 @@ fn align_width(widths: impl Iterator<Item = usize>) -> usize {
     widths.filter(|width| *width <= 40).max().unwrap_or(0) + 2
 }
 
-/// Displays the source of the declaration `name` in the named file only, or lists the
-/// candidates when several match equally well.
+/// Displays the source of every declaration named exactly `name` in the named file only,
+/// or of the one whose last segment it is; lists the candidates when several or none match.
 fn show_symbol(path: &str, name: &str) -> Result<bool, String> {
     let (source, file) = read(path)?;
     let named: Vec<_> = (file.units().map(|(unit, _)| unit))
         .filter(|unit| is_named(&unit.name, name))
         .collect();
     let exact = named.iter().any(|unit| unit.name == name);
-    let best: Vec<_> = named
+    let shown: Vec<_> = named
         .iter()
         .filter(|unit| !exact || unit.name == name)
         .collect();
-    let [unit] = best[..] else {
-        eprintln!("{} declarations match {path}::{name}", best.len());
-        for unit in best {
+    if !exact && shown.len() != 1 {
+        println!("{} matches for '{path}::{name}':", shown.len());
+        for unit in shown {
             println!(
                 "{path}::{} (L{}–{})",
                 unit.name, unit.line_start, unit.line_end
             );
         }
         return Ok(false);
-    };
-    let (start, end) = (unit.line_start, unit.line_end);
-    println!("{path}::{name} (L{start}–{end})");
-    for line in source
-        .lines()
-        .skip(start.saturating_sub(1))
-        .take(end + 1 - start)
-    {
-        println!("{line}");
+    }
+    for unit in shown {
+        let (start, end) = (unit.line_start, unit.line_end);
+        println!("{path}::{} (L{start}–{end})", unit.name);
+        for line in source.lines().skip(start - 1).take(end + 1 - start) {
+            println!("{line}");
+        }
     }
     Ok(true)
 }
@@ -166,20 +161,14 @@ fn is_named(symbol: &str, query: &str) -> bool {
 
 /// Fits a description beside a tree entry, cutting it to the line.
 fn print_entry(prefix: &str, description: Option<String>, target_width: usize) {
-    match description {
-        Some(description) => {
-            let separator_width = target_width.saturating_sub(prefix.chars().count()).max(2);
-            let separator = format!("  #{} ", "─".repeat(separator_width));
-            let available = 78usize
-                .saturating_sub(prefix.chars().count() + separator.chars().count())
-                .max(24);
-            println!(
-                "{prefix}{separator}{}",
-                truncate_right(&description, available)
-            );
-        }
-        None => println!("{prefix}"),
-    }
+    let Some(description) = description else {
+        return println!("{prefix}");
+    };
+    let width = prefix.chars().count();
+    let separator = "─".repeat(target_width.saturating_sub(width).max(2));
+    let available = 78usize.saturating_sub(width + separator.chars().count() + 4);
+    let description = truncate_right(&description, available.max(24));
+    println!("{prefix}  #{separator} {description}");
 }
 
 fn truncate_right(text: &str, width: usize) -> String {
@@ -210,20 +199,14 @@ fn tree_entries(root: &str, files: Vec<(String, Option<String>)>) -> Vec<Entry> 
 
 /// Renders branch connectors based on later siblings.
 fn render_prefix(index: usize, parts: &[String], entries: &[Entry]) -> String {
-    let mut prefix = String::new();
-    for depth in 1..parts.len() {
-        prefix.push_str(if has_later_sibling(index, &parts[..depth], entries) {
-            "│  "
-        } else {
-            "   "
-        });
-    }
-    prefix.push_str(if has_later_sibling(index, parts, entries) {
+    let later = |depth| has_later_sibling(index, &parts[..depth], entries);
+    let rails = (1..parts.len()).map(|depth| if later(depth) { "│  " } else { "   " });
+    let branch = if later(parts.len()) {
         "├─ "
     } else {
         "└─ "
-    });
-    prefix
+    };
+    rails.chain([branch]).collect()
 }
 
 fn has_later_sibling(index: usize, path: &[String], entries: &[Entry]) -> bool {

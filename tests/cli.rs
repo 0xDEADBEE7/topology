@@ -476,38 +476,49 @@ fn commands_follow_the_exit_code_contract() {
     };
     let (status, help, _) = run(&["--help"]);
     assert_eq!(status, Some(0));
-    for command in [
+    let forms = [
+        "topo [<path>",
         "topo find",
         "topo score",
         "topo extract",
-        "--help",
         "--version",
-    ] {
-        assert!(help.contains(command), "usage lists {command}");
+    ];
+    for form in forms {
+        assert!(help.contains(form), "usage lists {form}");
     }
+    assert_eq!(run(&["score", "-h"]).0, Some(0), "help anywhere");
     let (status, version, _) = run(&["--version"]);
     assert_eq!((status, version.starts_with("topo ")), (Some(0), true));
+    let (status, tree, _) = run(&[]);
+    assert_eq!(
+        (status, tree.contains("├─ src/")),
+        (Some(0), true),
+        "bare topo is topo ."
+    );
     let found = run(&["find", "classify", "tests/fixtures/typescript"]);
     let path = "tests/fixtures/typescript/basic.ts::classify [function] (L1–7)";
     assert_eq!((found.0, found.1.contains(path)), (Some(0), true));
-    assert_eq!(
-        run(&["find", "nothing_here", "tests/fixtures/rust"]).0,
-        Some(1)
-    );
+    let elsewhere = run(&["find", "classify", "tests/fixtures/rust"]);
+    assert_eq!(elsewhere.0, Some(1), "find searches only its directory");
     let (status, candidates, _) = run(&["tests/fixtures/rust/impls.rs::size"]);
     assert_eq!(status, Some(1), "an ambiguous name lists its candidates");
-    assert_eq!(candidates.lines().count(), 4, "{candidates}");
+    assert_eq!(candidates.lines().count(), 5, "{candidates}");
     assert!(candidates.contains("tests/fixtures/rust/impls.rs::Vec::size (L24–27)"));
-    assert_eq!(
-        run(&["tests/fixtures/typescript/basic.ts::missing"]).0,
-        Some(1)
-    );
-    for usage in [
-        &["src", "extra"][..],
+    let missing = run(&["tests/fixtures/typescript/basic.ts::missing"]);
+    assert_eq!(missing.0, Some(1));
+    let (status, both, _) = run(&["tests/fixtures/typescript/semantics.tsx::register(…)"]);
+    let shown = both.matches("::register(…) (L79–79)").count();
+    assert_eq!((status, shown), (Some(0), 2), "every exact match is shown");
+    let usages: [&[&str]; 7] = [
+        &["src", "tests"],
         &["--bogus"],
         &["find"],
+        &["find", "x", "src", "tests"],
+        &["find", "--bogus"],
+        &["extract", "src", "tests"],
         &["score", "--bogus"],
-    ] {
+    ];
+    for usage in usages {
         let (status, _, stderr) = run(usage);
         assert_eq!(status, Some(2), "{usage:?}");
         assert!(stderr.starts_with("error: "), "{usage:?}: {stderr}");

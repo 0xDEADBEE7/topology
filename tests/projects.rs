@@ -470,6 +470,7 @@ fn discovery_keeps_sources_and_skips_generated_and_installed_code() {
     ] {
         project.write(file, "export function f() {}\n");
     }
+    project.write("real/r.rs", "pub fn f() {}\n");
     #[cfg(unix)]
     std::os::unix::fs::symlink(project.0.join("real"), project.0.join("linked")).unwrap();
     let topo = |args: &[&str]| {
@@ -507,6 +508,16 @@ fn discovery_keeps_sources_and_skips_generated_and_installed_code() {
     for file in ["src/App.selection.ts", "src/bin/tool.rs", "src/types.d.ts"] {
         assert_eq!(table.matches(&format!("│ {file} ")).count(), 1, "{table}");
     }
+    assert!(
+        topo(&["score"]).0.contains("│ build/build.ts "),
+        "score defaults to ."
+    );
     #[cfg(unix)]
-    assert_eq!(files(topo(&["extract", "linked"]).0), ["r.rs"]);
+    {
+        assert_eq!(files(topo(&["extract", "linked"]).0), ["r.rs"]);
+        assert!(topo(&["score", "linked"]).0.contains("│ linked/r.rs "));
+        assert!(topo(&["find", "f", "linked"])
+            .0
+            .contains("linked/r.rs::f [function]"));
+    }
 }

@@ -11,7 +11,7 @@ mod tree;
 mod walk;
 
 use report::Options;
-use std::path::Path;
+use std::{ffi::OsString, path::Path};
 
 #[cfg(unix)]
 extern "C" {
@@ -33,7 +33,7 @@ fn main() {
     unsafe {
         signal(13, 0);
     }
-    let status = match run(std::env::args().skip(1).collect()) {
+    let status = match run(std::env::args_os().skip(1).collect()) {
         Ok(found) => i32::from(!found),
         Err(error) => {
             eprintln!("error: {error}");
@@ -43,18 +43,20 @@ fn main() {
     std::process::exit(status);
 }
 
-/// Routes arguments to a command, returning false when it found nothing.
-fn run(args: Vec<String>) -> Result<bool, String> {
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+/// Routes arguments to a command, returning false when it found nothing; an argument that
+/// is not Unicode reads as an unknown option.
+fn run(args: Vec<OsString>) -> Result<bool, String> {
+    let args: Vec<&str> = args.iter().map(|arg| arg.to_str().unwrap_or("-")).collect();
     match args.as_slice() {
         _ if args.contains(&"--help") || args.contains(&"-h") => println!("{USAGE}"),
         ["--version" | "-V"] => println!("topo {}", env!("CARGO_PKG_VERSION")),
-        ["find", name] | ["find", name, _] => return tree::find(name, args.get(2).unwrap_or(&".")),
         ["score", rest @ ..] => score(rest)?,
+        _ if args.iter().any(|arg| arg.starts_with('-')) => return Err(USAGE.to_owned()),
+        ["find", name] | ["find", name, _] => return tree::find(name, args.get(2).unwrap_or(&".")),
         ["extract"] => extract::run(".")?,
         ["extract", target] => extract::run(target)?,
         [] => return tree::inspect("."),
-        [target] if !target.starts_with('-') && *target != "find" => return tree::inspect(target),
+        [target] if *target != "find" => return tree::inspect(target),
         _ => return Err(USAGE.to_owned()),
     }
     Ok(true)

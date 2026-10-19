@@ -7,8 +7,8 @@ use std::{
 };
 
 /// Analyses every supported file under `targets` as it is iterated, once each however it
-/// was spelt, naming each relative to `root` and skipping, with a warning, any that
-/// cannot be read or is not supported.
+/// was spelt (the first spelling wins), naming each relative to `root` and skipping, with a
+/// warning, any that cannot be read or is not supported.
 pub fn analyse<'a>(
     targets: &[impl AsRef<Path>],
     root: &'a Path,
@@ -16,14 +16,14 @@ pub fn analyse<'a>(
     let mut paths = Vec::new();
     for target in targets.iter().map(AsRef::as_ref) {
         let metadata = fs::metadata(target).map_err(|e| format!("{}: {e}", target.display()))?;
-        match metadata.is_dir() {
-            true => collect(target, &mut paths)?,
-            false => paths.push(target.to_owned()),
+        match metadata.is_file() {
+            true => paths.push(target.to_owned()),
+            false => collect(target, &mut paths)?,
         }
     }
     let canonical = |path: &PathBuf| fs::canonicalize(path).unwrap_or_else(|_| path.clone());
     let mut paths: Vec<_> = paths.into_iter().map(|p| (canonical(&p), p)).collect();
-    paths.sort();
+    paths.sort_by(|a, b| a.0.cmp(&b.0));
     paths.dedup_by(|a, b| a.0 == b.0);
     let files = paths.into_iter().filter_map(move |(_, path)| {
         let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy();
@@ -50,10 +50,10 @@ fn collect(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("");
-        let metadata = fs::symlink_metadata(&path)
-            .ok()
-            .filter(|_| !name.starts_with('.'));
-        let Some(kind) = metadata.map(|metadata| metadata.file_type()) else {
+        let warn = |e| eprintln!("warning: {}: {e}; skipped", path.display());
+        let metadata = fs::symlink_metadata(&path).map_err(warn).ok();
+        let visible = metadata.filter(|_| !name.starts_with('.'));
+        let Some(kind) = visible.map(|metadata| metadata.file_type()) else {
             continue;
         };
         if kind.is_dir() && !excluded(name) {
