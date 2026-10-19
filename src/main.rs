@@ -5,6 +5,7 @@ mod lang;
 mod metrics;
 mod paths;
 mod report;
+mod syntax;
 mod table;
 mod tree;
 mod walk;

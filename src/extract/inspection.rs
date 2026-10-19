@@ -1,6 +1,7 @@
 //! Builds file outlines and repository descriptions for progressive inspection.
 
-use super::{documentation::module_doc, records, repo_name, symbol_info, SymbolInfo};
+use super::{records, repo_name, symbol_info, SymbolInfo};
+use crate::syntax::module_doc;
 use std::fs;
 
 /// Return the indexed symbols belonging to one source file.

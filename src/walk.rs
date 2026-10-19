@@ -3,6 +3,7 @@
 use crate::{
     lang::{Language, Spec},
     metrics::{ClassMetrics, FileMetrics, FnMetrics},
+    syntax,
 };
 use std::cmp::Reverse;
 use tree_sitter::{Node, Parser};
@@ -37,7 +38,7 @@ pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
         language: language.name(),
         path: path.to_owned(),
         loc: walker.code.iter().filter(|code| **code).count(),
-        has_docstring: crate::extract::module_doc(source).is_some(),
+        has_docstring: syntax::module_doc(source).is_some(),
         parse_errors,
         fns: walker.units(),
         classes: walker.classes,
@@ -82,7 +83,7 @@ impl Walker<'_> {
     /// cognitive increments and code rows to the unit that owns them.
     fn walk(&mut self, node: Node<'_>, unit: Option<usize>, nesting: u32) {
         let kind = node.kind();
-        if self.spec.comments.contains(&kind) || self.is_docstring(node) {
+        if self.spec.comments.contains(&kind) || syntax::is_docstring(self.spec, node) {
             return;
         }
         let start = (node.start_position().row, node.start_byte());
@@ -129,7 +130,7 @@ impl Walker<'_> {
             line_end: node.end_position().row + 1,
             loc: 0,
             cognitive: 0,
-            has_docstring: self.documented(node, declaration),
+            has_docstring: syntax::documented(self.spec, self.source, node, declaration),
         });
         self.fns.len() - 1
     }
@@ -161,43 +162,6 @@ impl Walker<'_> {
                 *code = true;
             }
         }
-    }
-
-    /// Recognizes a bare string statement, which documents rather than computes.
-    fn is_docstring(&self, node: Node<'_>) -> bool {
-        self.spec.docs.is_empty()
-            && node.kind() == "expression_statement"
-            && node.named_child_count() == 1
-            && node
-                .named_child(0)
-                .is_some_and(|child| matches!(child.kind(), "string" | "concatenated_string"))
-    }
-
-    /// Finds a doc comment or attribute above the declaration, or a docstring opening the body.
-    fn documented(&self, node: Node<'_>, declaration: Node<'_>) -> bool {
-        if self.spec.docs.is_empty() {
-            let mut cursor = node.walk();
-            let body = node.child_by_field_name("body");
-            let first =
-                body.and_then(|body| body.named_children(&mut cursor).find(|s| !s.is_extra()));
-            return first.is_some_and(|statement| self.is_docstring(statement));
-        }
-        let mut sibling = declaration.prev_named_sibling();
-        while let Some(node) = sibling {
-            let text = node.utf8_text(self.source).unwrap_or_default();
-            let doc = |prefix: &&str| {
-                let rest = text.strip_prefix(*prefix);
-                rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
-            };
-            if self.spec.docs.iter().any(doc) && !text.starts_with("#[doc(hidden") {
-                return true;
-            }
-            if !self.spec.attributes.contains(&node.kind()) {
-                return false;
-            }
-            sibling = node.prev_named_sibling();
-        }
-        false
     }
 
     /// Names a function by itself, its binding, or its test block; None folds a nested callback.

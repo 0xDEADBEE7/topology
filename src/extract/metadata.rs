@@ -2,10 +2,10 @@
 
 pub(super) use super::{
     declarations::{is_exported, visibility},
-    documentation::{docstring, module_doc},
     resolution::resolve_import,
 };
 use crate::lang::Language;
+pub(super) use crate::syntax::{docstring, module_doc};
 
 /// Normalize a language name for serialized output.
 pub(super) fn language_name(language: &str) -> &'static str {
