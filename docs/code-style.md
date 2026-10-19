@@ -27,7 +27,7 @@ Prefer one short sentence or two compact clauses. The description should remain 
 
 ```text
 src/lang.rs            # Maps extensions to languages and their syntax tables
-src/extract/           # Builds structured records for files, imports, and symbols
+src/extract.rs         # Prints records for files, imports, and declarations
 ```
 
 A useful description is:
@@ -55,7 +55,7 @@ Use signatures and tests for detail. Use docstrings to provide orientation and i
 A good file name says where to look. A good docstring says why it exists. A good symbol name says what to search for. Together they let a reader move through the progressive workflow:
 
 ```text
-topo ./src → topo ./src/extract/records.rs → topo ./src/extract/records.rs::records
+topo ./src → topo ./src/extract.rs → topo ./src/extract.rs::records
 ```
 
 Documentation should make each step more informative without requiring a source dump.

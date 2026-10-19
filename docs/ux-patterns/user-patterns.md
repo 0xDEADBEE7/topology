@@ -18,8 +18,8 @@ Use `topo .` for the broad map and `topo ./src` for production code.
 ## Narrow to a file
 
 ```bash
-topo ./src/extract
-topo ./src/extract/metadata.rs
+topo ./tests/fixtures
+topo ./src/extract.rs
 ```
 
 The file view shows its description, symbols, and line ranges without dumping the implementation. Pick one or two likely symbols, then inspect only those.
@@ -28,21 +28,21 @@ The file view shows its description, symbols, and line ranges without dumping th
 
 ```bash
 topo find resolve_import
-topo find FileMetrics
+topo find FileInfo
 topo find analyse
 ```
 
 Search returns the path and line range for functions, structs, and classes. For an exact path-qualified lookup, copy the path shown by the result:
 
 ```bash
-topo find src/metrics::FileMetrics
-topo ./src/metrics.rs::FileMetrics
+topo find src/metrics::FileInfo
+topo ./src/metrics.rs::FileInfo
 ```
 
 ## Inspect one implementation
 
 ```bash
-topo ./src/extract/resolution.rs::resolve_import
+topo ./src/extract.rs::resolve_import
 topo ./tests/fixtures/typescript/basic.ts::classify
 ```
 
@@ -78,13 +78,13 @@ This distinguishes exported entry points from private implementation details.
 topo extract . | jq -c 'select(.type == "import" and .path == "src/main.rs")'
 ```
 
-Each import record shows its source, any locally resolved path, and whether it resolved.
+Each import record shows its source as written and, when a relative import names a local file, its `resolved_path` (otherwise null). Declaration records mark whether they are `exported`.
 
 ## Use complexity to prioritize reading
 
 ```bash
 topo score ./src
-topo score --detail ./src/extract/resolution.rs
+topo score --detail ./src/extract.rs
 ```
 
 A hotspot is a prioritization hint, not proof of a defect. It is a useful first read for control-flow bugs and refactors.

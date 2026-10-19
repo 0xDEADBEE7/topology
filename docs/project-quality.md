@@ -27,11 +27,14 @@ extraction records it as `parse_errors`. Every command skips a file or directory
 it cannot read with a warning naming it; scoring fails only when no file could be
 analysed.
 
-The tree reads descriptions without parsing: the first paragraph of a leading
-`//!`, `/*!` or `/** */` comment or Python docstring, up to its first `@` tag. It
-skips plain `/* */` comments, license headers, `@` pragmas, reStructuredText
-titles and directives such as `'use client'`. The score's Docs column for files
-uses the same reader in every language.
+Descriptions come from the doc node the parser finds. A file's is its module
+docstring or the `//!`, `/*!` and `/** */` blocks before its first code, past
+shebangs, inner attributes and directives such as `'use client'`. A declaration's
+is the doc comment above it, past attributes, decorators and plain comments, or
+the docstring opening its body (never an f-string or bytes literal). A description
+is the first paragraph of prose up to its first `@` tag: plain comments, tag-only
+JSDoc, license blocks and reStructuredText titles describe nothing. The score's
+Doc column marks exactly the files and functions that have one.
 
 `topo score` rates functions, not files. A function takes the worse of two bands
 (`topo score --guide <path>` prints them):
@@ -45,7 +48,9 @@ Each file row shows its lines and whether it has a module doc, followed by its
 yellow and red functions (`--detail` lists every function). A summary line counts
 the yellow and red functions and the share of function lines they hold, plus doc
 coverage, and `~` marks partially parsed files. Extracted function records carry `loc`, `cognitive`
-and `band`. Code lines hold source text, string contents included, that is
+and `band`, and every declaration record its `signature` (up to its body), `parent`
+and `exported`: `export` or an `export { }`/`export default` naming it, any `pub`,
+or a public top-level Python name. Code lines hold source text, string contents included, that is
 neither a comment nor a Python string statement (docstrings and strings used as
 comments). A function's range runs from its declaration (binding, export, wrapper
 call, or test call with its table) to the end of its body, but a callback passed
@@ -67,8 +72,12 @@ eslint-plugin-sonarjs 4.2.2 agrees exactly on 88% of corpus functions and on the
 band of 99%; it scores callbacks separately, ignores `||` runs and exempts JSX
 `&&`, so its numbers are lower by design.
 
-Relative imports resolve existing TypeScript and JavaScript files and directory
-indexes. Package imports and tsconfig aliases remain unresolved. This is
+Imports are read from the syntax tree: `import`, `export … from`, `import x =
+require()`, `import()` and `require()` in TypeScript and JavaScript, Python
+`import` and `from … import` with their leading dots, and Rust `use` expanded to
+one path each. Relative imports resolve to existing files: script specifiers to
+files and directory indexes, Python modules by dot level. Package imports,
+tsconfig aliases, Rust paths and absolute Python imports remain unresolved. This is
 a structural assessment, not TypeScript type checking or React hook-rule linting.
 
 # Development checks

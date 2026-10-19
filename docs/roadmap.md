@@ -1,6 +1,6 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0–M5 done.
+Status (October 2026): M0–M6 done.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
@@ -73,8 +73,38 @@ Status (October 2026): M0–M5 done.
   deviation or the package's `elif` nesting bug. Kept: let-else adds nothing, as in
   SonarSource's own Rust analyzer. The corpus harness now flags requests' 70 malformed
   Python imports (it reported 0).
-- Size: `src` is 22 files, 2,176 physical and 1,845 code lines, all green. Budget 22
-  files and 1,857 code lines; yellow share 0‰.
+- M5 fix review (16 of 20 findings confirmed, 12 of them regressions; all fixed in M6
+  except pre-existing parenthesized Python docstrings): a method-chain callback bound by
+  an object key, class field or assignment starts at its binding; a comment is not a
+  wrapper call's argument; functions in objects, call arguments, decorators, heritage
+  clauses and static blocks are not class members (16 corpus names lose a wrong
+  `App.`/`WaypointClient.` prefix); Rust impls on arrays, tuples, pointers, fn types and
+  trait objects keep their type's text (`[u8; 4]::size`, not `4]::size`); equal rows go
+  to the unit with fewer bytes, so `withX = (C) => function WithX() {...}` charges the
+  body to `WithX`; Unicode and zero-width spaces are blank; an outline entry inside two
+  equal-range entries sits one level below them; f-strings and bytes are not docstrings.
+- M6 verify: one `FileInfo` per file (units with doc, signature, `exported` and
+  `parent`; imports; module doc) feeds score, extract, the tree, outlines and `find`.
+  The 14-file `extract/`, its line scanners, models.rs and serde are gone, so syn,
+  quote and proc-macro2 leave the build (`cargo tree -i syn` prints nothing; 5
+  dependencies). Bogus import sources fell from 939/13/100/414/70/8 to 0 on all six
+  repositories (the harness now accepts the valid specifiers `.` and `..`). The 31
+  excalidraw wrong-file resolutions were already fixed in M1; now no import resolves to
+  its own file and no earlier resolution changed, while resolved pairs rose (excalidraw
+  2,299 → 2,862, docusaurus 852 → 1,362, requests 2 → 82 relative Python imports).
+  Outlining a 40,000-line TS file takes 0.09–0.18 s (2.4–14.5 s before, on three
+  generated files). The Doc column equals extract's descriptions in every repository:
+  described functions went from 541 to 643 in excalidraw (JSDoc above class fields and
+  object pairs) and from 305 to 259 in docusaurus (tag-only JSDoc such as `/** @type */`
+  describes nothing); plain `//` comments above TS functions no longer count. Function
+  names, lines and metrics, file descriptions and the directory tree are otherwise
+  unchanged. The tree now parses every file, so it takes 0.57 s on excalidraw (was
+  0.02 s) and warns about partially parsed files; extract takes 0.64 s (was 1.08 s).
+  M6 removed 363 code lines (1,845 → 1,482), within its −350 to −450 target, after
+  about 35 lines for the M5 review fixes and `export { }` clauses.
+- Size: `src` is 10 files, 1,780 physical and 1,482 code lines, all green. Budget 10
+  files and 1,500 code lines, the hard ceiling, so M7 must offset what it adds; yellow
+  share 0‰.
 
 ## 1. Recommendation
 
