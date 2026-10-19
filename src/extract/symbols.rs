@@ -31,7 +31,7 @@ where
         parent: None,
         signature: metadata::signature(language, source, item.start()),
         lines: [item.start(), item.end()],
-        description: metadata::docstring(language, source, Some(item.start())),
+        description: metadata::docstring(language, source, item.start()),
         metrics: item.metrics(),
     })
     .map_err(|e| e.to_string())

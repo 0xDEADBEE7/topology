@@ -64,7 +64,7 @@ fn export(language: &str, source: &str, start: usize, end: usize) -> Option<Expo
     metadata::is_exported(language, source, start).then(|| Export {
         signature: metadata::signature(language, source, start),
         lines: [start, end],
-        description: metadata::docstring(language, source, Some(start)),
+        description: metadata::docstring(language, source, start),
     })
 }
 
@@ -83,7 +83,7 @@ fn file_record(
         record_type: "file",
         repo: repo.to_owned(),
         path: relative.to_owned(),
-        description: metadata::docstring(language, source, None),
+        description: metadata::module_doc(source),
         imports,
         exports,
         metrics: Metrics {

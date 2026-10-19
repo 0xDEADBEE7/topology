@@ -44,6 +44,31 @@ const MAX_LINES: u64 = 2_650;
 const MAX_DEPENDENCIES: usize = 6;
 
 #[test]
+fn partially_parsed_files_keep_their_functions() {
+    let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        .args(["extract", "tests/fixtures/partial"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let records: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for (file, function) in [
+        ("generic-import.ts", "load"),
+        ("call-signatures.ts", "create"),
+        ("jsx-entity.tsx", "Search"),
+        ("anonymous-default.d.ts", "helper"),
+        ("nul-template.ts", "separator"),
+    ] {
+        assert!(stderr.contains(file), "{file} parses now; drop the fixture");
+        assert!(records
+            .iter()
+            .any(|record| record["path"] == file && record["name"] == function));
+    }
+}
+
+#[test]
 fn project_meets_its_structural_quality_bands() {
     let records = topo(&["extract", "src"]);
     let (mut files, mut lines) = (0, 0);

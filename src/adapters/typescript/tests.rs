@@ -28,44 +28,6 @@ fn measures_recoverable_typescript() {
     assert!(metrics.parse_errors > 0);
 }
 
-/// Syntax the TypeScript grammar still rejects, with the function each file must keep.
-const PARTIAL: [(&str, &str, &str); 5] = [
-    (
-        "generic-import.ts",
-        "export async function load() { return await mocked<typeof import(\"./m\")>(); }",
-        "load",
-    ),
-    (
-        "call-signatures.ts",
-        "type Store = {\n  (): number\n  <U>(selector: U): U\n};\nexport function create() {}",
-        "create",
-    ),
-    (
-        "jsx-entity.tsx",
-        "export function Search() { return <a href=\"?a=1&b=2\">search</a>; }",
-        "Search",
-    ),
-    (
-        "anonymous-default.d.ts",
-        "declare module \"m\" {\n  export default function (): null;\n}\nexport function helper() {}",
-        "helper",
-    ),
-    (
-        "nul-template.ts",
-        "export function separator() { return `a\0b`; }",
-        "separator",
-    ),
-];
-
-#[test]
-fn partially_parsed_files_keep_their_functions() {
-    for (path, source, name) in PARTIAL {
-        let metrics = TypeScriptAdapter.analyse(path, source).unwrap();
-        assert!(metrics.parse_errors > 0, "{path} parses now; drop it");
-        assert!(metrics.fns.iter().any(|f| f.name == name), "{path}");
-    }
-}
-
 #[test]
 fn assesses_react_components_and_jsdoc() {
     let source = include_str!("../../../tests/fixtures/typescript/components.tsx");

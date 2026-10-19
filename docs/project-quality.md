@@ -24,6 +24,10 @@ warning names the file and its error count, and extraction records it as
 `syn` rejects) with a warning naming it; scoring fails only when no file could
 be analysed.
 
+The tree reads descriptions without parsing: the first paragraph of a leading
+`//!`, `/*!` or `/** */` comment or Python docstring, skipping license headers,
+`@` pragmas, reStructuredText titles and directives such as `'use client'`.
+
 Relative imports resolve existing TypeScript and JavaScript files and directory
 indexes. Package imports and tsconfig aliases remain unresolved. This is
 a structural assessment, not TypeScript type checking or React hook-rule linting.

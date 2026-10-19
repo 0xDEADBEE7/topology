@@ -2,7 +2,7 @@
 
 pub(super) use super::{
     declarations::{is_exported, visibility},
-    documentation::docstring,
+    documentation::{docstring, module_doc},
     resolution::resolve_import,
 };
 use crate::adapters::ECMA_EXTENSIONS;

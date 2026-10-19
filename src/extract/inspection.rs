@@ -1,6 +1,6 @@
 //! Builds file outlines and repository descriptions for progressive inspection.
 
-use super::{file_records, records, repo_name, symbol_info, SymbolInfo};
+use super::{documentation::module_doc, records, repo_name, symbol_info, SymbolInfo};
 use std::fs;
 
 /// Return the indexed symbols belonging to one source file.
@@ -31,31 +31,21 @@ pub fn file_outline(path: &str) -> Result<(Option<String>, Vec<SymbolInfo>), Str
     Ok((description, symbols))
 }
 
-/// File descriptions from an extraction snapshot, ordered by path.
+/// File descriptions read from leading comments without parsing, ordered by path.
 pub fn file_descriptions(root: &str) -> Result<Vec<(String, Option<String>)>, String> {
     let root = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
-    let repo = repo_name(&root);
     let mut paths = Vec::new();
     crate::paths::collect(&root, &mut paths)?;
     paths.sort();
-    let mut files = Vec::new();
-    for path in paths {
-        for record in file_records(&root, &repo, &path) {
-            if record.get("type").and_then(serde_json::Value::as_str) == Some("file") {
-                files.push((
-                    record
-                        .get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or_default()
-                        .to_owned(),
-                    record
-                        .get("description")
-                        .and_then(|value| value.as_str())
-                        .map(str::to_owned),
-                ));
-                break;
-            }
-        }
-    }
-    Ok(files)
+    Ok(paths
+        .iter()
+        .map(|path| {
+            let relative = path.strip_prefix(&root).unwrap_or(path).to_string_lossy();
+            let description = fs::read_to_string(path)
+                .map_err(|error| eprintln!("warning: {relative}: {error}"))
+                .ok()
+                .and_then(|source| module_doc(&source));
+            (relative.into_owned(), description)
+        })
+        .collect())
 }

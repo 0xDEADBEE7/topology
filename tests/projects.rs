@@ -165,6 +165,40 @@ fn tree_nests_a_directory_beside_its_same_named_file() {
 }
 
 #[test]
+fn tree_descriptions_skip_licenses_pragmas_and_headings() {
+    let project = Project::new();
+    project.write(
+        "menu.tsx",
+        "'use client';\n/**\n * Renders the menu.\n *\n * More.\n */\nexport function Menu() {}",
+    );
+    project.write(
+        "license.ts",
+        "/**\n * Copyright (c) Meta.\n */\n/** @jsx h */\nimport x from 'y';",
+    );
+    project.write(
+        "tools.py",
+        "#!/usr/bin/env python\n\"\"\"\nTools\n=====\n\nRuns tools.\n\"\"\"",
+    );
+    project.write("flags.rs", "//!\n//! Parses flags.\nfn main() {}");
+    project.write("empty.ts", "/**\n */\nexport const x = 1;");
+    let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        .arg(&project.0)
+        .output()
+        .unwrap();
+    let tree = String::from_utf8(output.stdout).unwrap();
+    let described = |entry: &str, doc: &str| {
+        tree.lines()
+            .any(|line| line.starts_with(&format!("{entry}  #─")) && line.ends_with(doc))
+    };
+    assert!(described("├─ flags.rs", "─ Parses flags."), "{tree}");
+    assert!(described("├─ menu.tsx", "─ Renders the menu."), "{tree}");
+    assert!(described("└─ tools.py", "─ Runs tools."), "{tree}");
+    for bare in ["├─ empty.ts", "├─ license.ts"] {
+        assert!(tree.lines().any(|line| line == bare), "{tree}");
+    }
+}
+
+#[test]
 fn symbol_descriptions_include_preceding_rust_and_jsdoc_comments() {
     let project = Project::new();
     project.write(

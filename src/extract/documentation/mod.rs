@@ -2,38 +2,24 @@
 
 mod file;
 mod preceding;
-use file::file_docs;
+use file::{leading_docs, opens_block};
 use preceding::preceding_docs;
 
-/// Extract documentation immediately preceding a file or symbol.
-pub(crate) fn docstring(
-    language: &str,
-    source: &str,
-    symbol_line: Option<usize>,
-) -> Option<String> {
-    let lines: Vec<&str> = source.lines().collect();
-    if language == "python" {
-        let start = symbol_line.map_or(0, |line| line.saturating_sub(1));
-        return lines[start..]
-            .iter()
-            .take(12)
-            .map(|line| line.trim())
-            .skip_while(|line| line.is_empty())
-            .find(|line| line.starts_with("\"\"\"") || line.starts_with("'''"))
-            .and_then(quoted_doc);
-    }
-    if symbol_line.is_none() {
-        return file_docs(&lines);
-    }
-    preceding_docs(&lines, symbol_line.unwrap_or(0), language)
+/// Describe a file by its leading module documentation, in any supported language.
+pub(crate) fn module_doc(source: &str) -> Option<String> {
+    leading_docs(&source.lines().collect::<Vec<_>>())
 }
 
-fn quoted_doc(line: &str) -> Option<String> {
-    let quote = if line.starts_with("\"\"\"") {
-        "\"\"\""
-    } else {
-        "'''"
-    };
-    let text = line.strip_prefix(quote)?;
-    Some(text.strip_suffix(quote).unwrap_or(text).trim().to_owned())
+/// Extract documentation for the declaration that starts on `line`.
+pub(crate) fn docstring(language: &str, source: &str, line: usize) -> Option<String> {
+    let lines: Vec<&str> = source.lines().collect();
+    if language == "python" {
+        let start = lines
+            .iter()
+            .skip(line)
+            .take(12)
+            .position(|text| opens_block(text))?;
+        return leading_docs(&lines[line + start..]);
+    }
+    preceding_docs(&lines, line, language)
 }
