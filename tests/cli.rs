@@ -74,7 +74,10 @@ fn project_meets_its_structural_quality_bands() {
             assert!(metrics["loc"].as_u64().unwrap() <= 60, "LoC: {label}");
         }
     }
-    assert!((1..=MAX_FILES).contains(&files), "{files} files over budget");
+    assert!(
+        (1..=MAX_FILES).contains(&files),
+        "{files} files over budget"
+    );
     assert!(lines <= MAX_LINES, "{lines} lines over budget");
     let dependencies = include_str!("../Cargo.toml")
         .split("[dependencies]")
@@ -84,5 +87,8 @@ fn project_meets_its_structural_quality_bands() {
         .take_while(|line| !line.starts_with('['))
         .filter(|line| line.contains('='))
         .count();
-    assert!(dependencies <= MAX_DEPENDENCIES, "{dependencies} dependencies");
+    assert!(
+        dependencies <= MAX_DEPENDENCIES,
+        "{dependencies} dependencies"
+    );
 }
