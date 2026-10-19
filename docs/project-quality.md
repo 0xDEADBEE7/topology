@@ -32,19 +32,16 @@ The Python fallback and Halstead token counts remain approximate.
 targets, unit tests, CLI integration tests, and the TypeScript smoke test.
 The integration suite extracts this project's `src` directory and enforces:
 
-- module descriptions are present;
-- file LoC stays below 300 and function LoC stays at or below 60;
-- file NMI stays at or above 20;
-- file and function CC and cognitive complexity stay below the red boundary of 15;
-- file and function Halstead volume stays below the red boundary of 1000.
+- every file has a module description and at most 400 lines;
+- every function stays at or below 60 lines and below the red boundaries for CC
+  and cognitive complexity (15) and Halstead volume (1000);
+- `src` stays within the project budget in `tests/cli.rs`: files, total lines
+  and dependencies.
 
-Yellow complexity bands remain advisory. These checks use the existing report
-thresholds without relaxing them. Documentation follows [the code style](./code-style.md):
-describe module responsibilities, public interfaces, and non-obvious helpers.
-Tests and routine trait implementations can rely on their names and contracts.
-
-The quality review separated CLI parsing, repository discovery, source metadata,
-import resolution, record assembly, report ratings, and tree rendering. It also
-fixed TSX grammar selection, nested TypeScript function double counting,
-short-circuit decision counting, exported JSDoc recognition, and the off-by-one
-error that hid preceding symbol descriptions.
+Complexity limits apply to functions only. File totals mostly measure size, and
+gating them rewarded splitting cohesive code into many small files. The budget
+is lowered as the [roadmap](./roadmap.md) shrinks the code and is never raised to
+make topo pass. Yellow bands remain advisory. Documentation follows
+[the code style](./code-style.md): describe module responsibilities, public
+interfaces, and non-obvious helpers. Tests and routine trait implementations can
+rely on their names and contracts.
