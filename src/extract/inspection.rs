@@ -6,8 +6,9 @@ use std::fs;
 /// Return the indexed symbols belonging to one source file.
 pub fn file_outline(path: &str) -> Result<(Option<String>, Vec<SymbolInfo>), String> {
     let root = fs::canonicalize(".").map_err(|e| e.to_string())?;
-    let path = fs::canonicalize(path).map_err(|e| format!("{path}: {e}"))?;
-    let values = records::records(&root, &repo_name(&root), &path)?;
+    let file = fs::canonicalize(path).map_err(|e| format!("{path}: {e}"))?;
+    let values =
+        records::records(&root, &repo_name(&root), &file).map_err(|e| format!("{path}: {e}"))?;
     let description = values[0]["description"].as_str().map(str::to_owned);
     let symbols = values
         .iter()

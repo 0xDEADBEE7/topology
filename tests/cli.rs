@@ -35,6 +35,8 @@ fn react_files_support_scoring_inspection_and_extraction() {
     assert!(score.contains("App"));
     let outline = topo(&["--full-docstring", path]);
     assert!(outline.contains("Chooses the greeting content."));
+    let single = topo(&["extract", "tests/fixtures/typescript/basic.ts"]);
+    assert!(single.contains(r#""path":"basic.ts""#) && single.contains("classify"));
     let records = topo(&["extract", "tests/fixtures/typescript"]);
     let values: Vec<serde_json::Value> = records
         .lines()

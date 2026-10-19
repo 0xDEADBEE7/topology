@@ -79,14 +79,17 @@ fn align_width(widths: impl Iterator<Item = usize>) -> usize {
 
 /// Displays the source of a declaration found in the named file only.
 fn show_symbol(path: &str, name: &str) -> Result<(), String> {
-    let (_, symbols) = crate::extract::file_outline(path)?;
-    let symbol = symbols
-        .iter()
-        .find(|symbol| symbol.name == name)
-        .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
-    let [start, end] = symbol.lines;
-    println!("{path}::{name} (L{start}–{end})");
     let source = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let file = crate::adapters::analyse(path, &source).map_err(|e| format!("{path}: {e}"))?;
+    let (start, end) = (file.fns.iter().map(|f| (&f.name, f.line_start, f.line_end)))
+        .chain(
+            file.classes
+                .iter()
+                .map(|c| (&c.name, c.line_start, c.line_end)),
+        )
+        .find_map(|(symbol, start, end)| (symbol == name).then_some((start, end)))
+        .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
+    println!("{path}::{name} (L{start}–{end})");
     for line in source
         .lines()
         .skip(start.saturating_sub(1))

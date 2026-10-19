@@ -29,13 +29,17 @@ pub struct SymbolInfo {
 
 /// Analyse a repository and emit one JSON record per file and symbol.
 pub fn run(root: &str) -> Result<(), String> {
-    let root = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
-    let repo = repo_name(&root);
+    let target = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
+    let root = target
+        .parent()
+        .filter(|_| target.is_file())
+        .unwrap_or(&target);
+    let repo = repo_name(root);
     let mut paths = Vec::new();
-    crate::paths::collect(&root, &mut paths)?;
+    crate::paths::collect(&target, &mut paths)?;
     paths.sort();
     for path in paths {
-        for value in file_records(&root, &repo, &path) {
+        for value in file_records(root, &repo, &path) {
             println!(
                 "{}",
                 serde_json::to_string(&value).map_err(|e| e.to_string())?

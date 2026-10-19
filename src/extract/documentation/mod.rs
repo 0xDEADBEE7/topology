@@ -14,12 +14,24 @@ pub(crate) fn module_doc(source: &str) -> Option<String> {
 pub(crate) fn docstring(language: &str, source: &str, line: usize) -> Option<String> {
     let lines: Vec<&str> = source.lines().collect();
     if language == "python" {
-        let start = lines
-            .iter()
-            .skip(line)
-            .take(12)
-            .position(|text| opens_block(text))?;
-        return leading_docs(&lines[line + start..]);
+        return python_docstring(&lines, line);
     }
     preceding_docs(&lines, line, language)
+}
+
+/// Reads the docstring that opens the body of the `def` or `class` starting on `line`.
+fn python_docstring(lines: &[&str], line: usize) -> Option<String> {
+    let mut depth = 0;
+    let end = (line.saturating_sub(1)..lines.len()).find(|&index| {
+        depth += lines[index].matches(['(', '[']).count() as i64;
+        depth -= lines[index].matches([')', ']']).count() as i64;
+        depth <= 0
+    })?;
+    let header = lines[end].split(" #").next().unwrap_or_default().trim_end();
+    let body = end
+        + 1
+        + lines[end + 1..]
+            .iter()
+            .position(|text| !text.trim().is_empty())?;
+    (header.ends_with(':') && opens_block(lines[body])).then(|| leading_docs(&lines[body..]))?
 }
