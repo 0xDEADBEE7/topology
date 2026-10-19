@@ -11,10 +11,9 @@ repository → directory → file outline → symbol → implementation
 ```bash
 topo .
 topo ./src
-make overview
 ```
 
-Use `topo .` for the broad map and `topo ./src` for production code. Use `make overview` when you want prioritized files and the **Read these ranges first** section.
+Use `topo .` for the broad map and `topo ./src` for production code.
 
 ## Narrow to a file
 
@@ -64,7 +63,7 @@ A broad concept may not match `resolve_import`. If the name is unknown, inspect 
 
 ## Check public boundaries
 
-Use the **Public surface** section from `make overview`, then inspect the relevant file and symbol:
+Inspect the module that registers entry points, then the relevant symbol:
 
 ```bash
 topo ./src/adapters/mod.rs
@@ -75,20 +74,17 @@ This distinguishes exported entry points from private implementation details.
 
 ## Check cross-file dependencies
 
-With a stored repository index:
-
 ```bash
-make imports FILE=src/extract/metadata.rs
-make imports FILE=src/main.rs
+topo extract . | jq -c 'select(.type == "import" and .path == "src/cli/mod.rs")'
 ```
 
-Use this to see local and unresolved dependencies. Refresh the store after source edits; live `topo PATH` and `topo find NAME` provide current ranges.
+Each import record shows its source, any locally resolved path, and whether it resolved.
 
 ## Use complexity to prioritize reading
 
 ```bash
-make hotspots-report
-topo score --detail ./src/extract/metadata.rs
+topo score --detail --all-metrics ./src
+topo score --detail --all-metrics ./src/extract/resolution.rs
 ```
 
 A hotspot is a prioritization hint, not proof of a defect. It is a useful first read for control-flow bugs and refactors.
@@ -99,10 +95,10 @@ A hotspot is a prioritization hint, not proof of a defect. It is a useful first 
 |---|---|
 | Find a feature | `topo find NAME`, then `topo PATH::NAME` |
 | Understand a subsystem | `topo ./src/SUBSYSTEM`, then inspect one file |
-| Fix a parser or resolver | `make overview`, then inspect the relevant ranges |
-| Trace a public API | **Public surface** → file outline → exported symbol |
+| Fix a parser or resolver | `topo score --detail ./src`, then inspect the relevant ranges |
+| Trace a public API | file outline → exported symbol |
 | Understand a fixture | `topo ./tests`, then `topo FILE::TEST_FUNCTION` |
-| Find refactor targets | `make hotspots-report`, then inspect the ranges |
+| Find refactor targets | `topo score --detail --all-metrics ./src`, then inspect the ranges |
 
 ## Keep output high-signal
 

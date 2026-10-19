@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-printf "%-10s %s\n" "Target"  "Description"
-printf "%-10s %s\n" "------"  "-----------"
-printf "%-10s %s\n" "build"   "cargo build --release"
-printf "%-10s %s\n" "test"    "cargo test"
-printf "%-10s %s\n" "lint"    "cargo clippy -- -D warnings"
-printf "%-10s %s\n" "check"   "lint + test (CI gate)"
-printf "%-14s %s\n" "extract" "extract metadata as raw JSONL"
-printf "%-14s %s\n" "index" "extract metadata and store JSONL in local .stash/"
-printf "%-10s %s\n" "metrics" "code health report"
-printf "%-10s %s\n" "tree" "show topo-extracted project file tree with descriptions"
-printf "%-10s %s\n" "functions" "show stored function index with locations and docs"
-printf "%-10s %s\n" "symbols" "find indexed symbols by name or qualified name"
-printf "%-10s %s\n" "definition" "show an indexed symbol definition (SYMBOL=path::name)"
-printf "%-10s %s\n" "imports" "show structured imports for a file"
-printf "%-10s %s\n" "overview" "show high-signal repository orientation and priorities"
-printf "%-10s %s\n" "visualize" "open interactive dependency graph in fig"
-printf "%-10s %s\n" "hotspots" "open interactive complexity chart in fig"
-printf "%-18s %s\n" "hotspots-report" "print textual complexity hotspot report"
+printf "%-16s %s\n" "Target"    "Description"
+printf "%-16s %s\n" "------"    "-----------"
+printf "%-16s %s\n" "build"     "cargo build --release"
+printf "%-16s %s\n" "test"      "cargo test plus the TypeScript smoke test"
+printf "%-16s %s\n" "lint"      "cargo fmt --check and clippy -D warnings"
+printf "%-16s %s\n" "check"     "lint + test (CI gate)"
+printf "%-16s %s\n" "extract"   "extract metadata as raw JSONL (REPO=dir)"
+printf "%-16s %s\n" "metrics"   "binary size and code health report"
+printf "%-16s %s\n" "tree"      "show topo-extracted project file tree with descriptions"
+printf "%-16s %s\n" "repo-tree" "show the tree for the whole repository"
+printf "%-16s %s\n" "clean"     "cargo clean"
+
+if [[ -x .local/scripts/help.sh ]]; then
+    .local/scripts/help.sh
+fi
