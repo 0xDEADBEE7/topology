@@ -49,7 +49,7 @@ fn react_files_support_scoring_inspection_and_extraction() {
 
 /// Size budget for `src`: lower these as the code shrinks, never raise them to pass.
 const MAX_FILES: usize = 42;
-const MAX_LINES: u64 = 2_650;
+const MAX_LINES: u64 = 2_612;
 const MAX_DEPENDENCIES: usize = 6;
 
 #[test]

@@ -1,10 +1,22 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0 and M1 done. The stash/fig scripts and their Make targets
-live in the untracked `.local/scripts/` (included by the Makefile when present). No
-corpus repository aborts, JavaScript is measured, and the budget is 42 files and
-2,650 lines (M1 grew `src` by 108 lines, above the +10 to +30 estimate; about 25
-are unit tests still inside `src`).
+Status (October 2026): M0 and M1 done, then reviewed and fixed.
+
+- The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
+  (included by the Makefile when present).
+- M1 verify: no corpus aborts; partially parsed files 0/5/5/5 (bulletproof-react/
+  excalidraw/zustand/docusaurus) plus 2 deliberately broken docusaurus JS fixtures;
+  symbol lookup on excalidraw's 11k-line App.tsx 0.03 s; tree on 10,000 files 0.20 s;
+  0 empty descriptions; binary 4.85 MB.
+- The corpus diff was not limited to previously failing files: tree-sitter-typescript
+  0.23 parses `import.meta` differently, moving Halstead/NMI in 25 files (CC, cognitive
+  and lines unchanged), and 2 docusaurus imports with import attributes lost a
+  resolution that only worked by accident (their sources are mangled until M6).
+- Ahead of M6, relative resolution already fixes excalidraw's 31 wrong-file imports
+  and maps `.js` specifiers to TypeScript sources.
+- Python and Rust still score the Docs column with their own heuristics until M5;
+  TypeScript and JavaScript use the shared module-doc reader.
+- Size: `src` is 42 files and 2,587 lines (+49 over M0); budget 42 files, 2,612 lines.
 
 ## 1. Recommendation
 
@@ -103,7 +115,8 @@ code. A constant changes only with the owner's approval and a reason in the comm
    reducer `switch` = 1.
 
 **Budget ratchet:** after each milestone, set the budget to the measured size plus the next
-milestone's planned growth plus 25 lines. It never goes up. The budget counts physical lines
+milestone's planned growth plus 25 lines; a milestone that plans to shrink the code counts
+as 0 growth until its deletions land. It never goes up. The budget counts physical lines
 until M5 and code lines from then on.
 
 ## 4. Milestones
@@ -260,7 +273,8 @@ and serde_json. Tests are about 500 lines and do not count toward the budget.
 5. Discovery via `git ls-files -co --exclude-standard` with the directory walk as fallback.
 6. Describe undocumented files in the tree by their exported names.
 7. `score` skips tests and stories by default, with `--tests` to include them.
-8. tree-sitter 0.25.10 (0.27.1 needs Rust 1.90).
+8. tree-sitter 0.25.10, the mature release (0.27.1 is newer; both need Rust 1.90 because
+   the shared grammar runtime, tree-sitter-language 0.1.9, does).
 9. SIGPIPE: a small `unsafe` reset (alternative: the safe `writeln!` route).
 10. Hotspots after the roadmap.
 
