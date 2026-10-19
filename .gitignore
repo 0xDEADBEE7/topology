@@ -2,3 +2,5 @@ target/
 .local/
 .plan/
 .stash/
+/primary.pf
+/data.jsonl.lock

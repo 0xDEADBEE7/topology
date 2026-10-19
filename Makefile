@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build test lint check metrics index tree project-tree repo-tree functions function-index symbols definition imports overview hotspots hotspots-report visualize visualize-dependencies visualize-hotspots clean
+.PHONY: help build test lint check metrics extract index tree project-tree repo-tree functions function-index symbols definition imports overview hotspots hotspots-report visualize visualize-dependencies visualize-hotspots clean
 
 help:
 	@.scripts/help.sh

@@ -3,8 +3,8 @@ set -euo pipefail
 
 stash_dir=${STASH_DIR:-.stash}
 path=${1:-}
-command -v stash >/dev/null 2>&1 || { echo "stash is required; run make extract-store first" >&2; exit 1; }
-command -v jq >/dev/null 2>&1 || { echo "jq is required; run make extract-store first" >&2; exit 1; }
+command -v stash >/dev/null 2>&1 || { echo "stash is required; run make index first" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq is required; run make index first" >&2; exit 1; }
 
 STASH_DIR="$stash_dir" stash get type=import | jq -sr --arg path "$path" '
   [.[] | select(.path and (.path == $path or $path == ""))]
