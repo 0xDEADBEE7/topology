@@ -4,6 +4,7 @@ use crate::{
     lang::{Language, Spec},
     metrics::{ClassMetrics, FileMetrics, FnMetrics},
 };
+use std::cmp::Reverse;
 use tree_sitter::{Node, Parser};
 
 const NOTHING: &[&str] = &[];
@@ -25,7 +26,6 @@ pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
         source: source.as_bytes(),
         code: vec![false; source.lines().count() + 1],
         fns: Vec::new(),
-        nested: Vec::new(),
         classes: Vec::new(),
     };
     walker.walk(tree.root_node(), None, 0);
@@ -71,11 +71,9 @@ fn syntax_errors(node: Node<'_>) -> usize {
 struct Walker<'a> {
     spec: &'static Spec,
     source: &'a [u8],
-    /// Whether each row holds code: a token that is neither a comment nor a docstring.
+    /// Whether each row holds code: text that is neither a comment nor a string statement.
     code: Vec<bool>,
     fns: Vec<FnMetrics>,
-    /// Line ranges of the named units nested directly in each unit.
-    nested: Vec<Vec<(usize, usize)>>,
     classes: Vec<ClassMetrics>,
 }
 
@@ -86,9 +84,6 @@ impl Walker<'_> {
         let kind = node.kind();
         if self.spec.comments.contains(&kind) || self.is_docstring(node) {
             return;
-        }
-        if node.child_count() == 0 {
-            return self.mark_code(node);
         }
         if self.spec.classes.contains(&kind) {
             self.classes.push(ClassMetrics {
@@ -102,65 +97,63 @@ impl Walker<'_> {
             .then(|| self.unit_name(node, unit.is_some()))
             .flatten();
         let (unit, nesting, nested) = if let Some(name) = named {
-            (Some(self.open(node, name, unit)), 0, NOTHING)
+            (Some(self.open(node, name)), 0, NOTHING)
         } else if function || self.spec.closures.contains(&kind) {
             (unit, nesting, BODY)
         } else {
             (unit, nesting, self.increment(node, unit, nesting))
         };
-        let mut cursor = node.walk();
+        let (mut cursor, mut gap) = (node.walk(), (node.start_position().row, node.start_byte()));
         let mut more = cursor.goto_first_child();
         while more {
+            let child = cursor.node();
             let deeper = nested.contains(&cursor.field_name().unwrap_or(""));
-            self.walk(cursor.node(), unit, nesting + u32::from(deeper));
+            self.mark_code(gap, child.start_byte());
+            self.walk(child, unit, nesting + u32::from(deeper));
+            gap = (child.end_position().row, child.end_byte());
             more = cursor.goto_next_sibling();
         }
+        self.mark_code(gap, node.end_byte());
     }
 
-    /// Starts a named unit; its lines then no longer count for the unit containing it.
-    fn open(&mut self, node: Node<'_>, name: String, parent: Option<usize>) -> usize {
+    /// Starts a named unit at its declaration.
+    fn open(&mut self, node: Node<'_>, name: String) -> usize {
         let declaration = self.declaration(node);
-        let lines = (
-            declaration.start_position().row + 1,
-            node.end_position().row + 1,
-        );
-        if let Some(parent) = parent {
-            self.nested[parent].push(lines);
-        }
         self.fns.push(FnMetrics {
             name,
-            line_start: lines.0,
-            line_end: lines.1,
+            line_start: declaration.start_position().row + 1,
+            line_end: node.end_position().row + 1,
             loc: 0,
             cognitive: 0,
             has_docstring: self.documented(node, declaration),
         });
-        self.nested.push(Vec::new());
         self.fns.len() - 1
     }
 
-    /// Counts each unit's code lines, leaving out the lines of named units nested in it.
+    /// Gives each code row to the smallest unit holding it, the earlier one on equal ranges.
     fn units(&mut self) -> Vec<FnMetrics> {
-        for (unit, nested) in self.fns.iter_mut().zip(&self.nested) {
-            let owned = |row: &usize| {
-                !nested
-                    .iter()
-                    .any(|(start, end)| (start..=end).contains(&row))
-            };
-            let rows = (unit.line_start..=unit.line_end).filter(owned);
-            unit.loc = rows
-                .filter(|row| self.code.get(row - 1) == Some(&true))
-                .count();
+        let mut owners = vec![None; self.code.len()];
+        let mut order: Vec<_> = (0..self.fns.len()).collect();
+        order.sort_by_key(|&i| Reverse((self.fns[i].line_end - self.fns[i].line_start, i)));
+        for i in order {
+            let unit = &self.fns[i];
+            owners[unit.line_start - 1..unit.line_end.min(self.code.len())].fill(Some(i));
+        }
+        for (owner, code) in owners.into_iter().zip(&self.code) {
+            if let (Some(i), true) = (owner, code) {
+                self.fns[i].loc += 1;
+            }
         }
         std::mem::take(&mut self.fns)
     }
 
-    /// Marks the rows where a token has visible text as code.
-    fn mark_code(&mut self, token: Node<'_>) {
-        let text = token.utf8_text(self.source).unwrap_or_default();
-        for (offset, line) in text.split('\n').enumerate() {
-            let row = self.code.get_mut(token.start_position().row + offset);
-            if let Some(code) = row.filter(|_| !line.trim().is_empty()) {
+    /// Marks the rows of source text that no child node covers, such as tokens and the
+    /// grammar's hidden tokens, as code.
+    fn mark_code(&mut self, (row, start): (usize, usize), end: usize) {
+        let text = self.source.get(start..end).unwrap_or_default();
+        for (offset, line) in text.split(|byte| *byte == b'\n').enumerate() {
+            let row = self.code.get_mut(row + offset);
+            if let Some(code) = row.filter(|_| !line.trim_ascii().is_empty()) {
                 *code = true;
             }
         }
@@ -321,16 +314,29 @@ impl Walker<'_> {
 
     /// Follows wrappers and declarations so a unit starts where its JSDoc attaches.
     fn declaration<'t>(&self, mut node: Node<'t>) -> Node<'t> {
-        while let Some(parent) = node.parent() {
-            let kind = parent.kind();
-            let through =
-                self.spec.wrappers.contains(&kind) || self.spec.declarations.contains(&kind);
-            if !through || (kind == "arguments" && !self.passes_arguments(parent, node)) {
-                break;
-            }
+        while let Some(parent) = node.parent().filter(|parent| self.climbs(*parent, node)) {
             node = parent;
         }
         node
+    }
+
+    /// Whether a declaration reaches `parent`: a wrapper, a declaration, the arguments that
+    /// bind `child`, or a call, unless that call is a method whose value is not declared (so
+    /// `items.filter(cb)` starts at its arguments but `it.each(table)(cb)` takes its table).
+    fn climbs(&self, parent: Node<'_>, child: Node<'_>) -> bool {
+        let kind = parent.kind();
+        let through = self.spec.wrappers.contains(&kind) || self.spec.declarations.contains(&kind);
+        let method = parent
+            .child_by_field_name("function")
+            .is_some_and(|callee| callee.kind() == "member_expression");
+        through
+            && match kind {
+                "arguments" => self.passes_arguments(parent, child),
+                "call_expression" if method => parent
+                    .parent()
+                    .is_some_and(|outer| self.climbs(outer, parent)),
+                _ => true,
+            }
     }
 
     /// Recognizes calls such as `memo(...)` or `React.forwardRef(...)` that wrap a component.

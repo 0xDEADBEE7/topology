@@ -77,3 +77,18 @@ describe("store", () => {
 });
 
 register(() => 1, () => 2);
+
+stream
+  .on("data", (chunk: string) => {
+    console.log(chunk);
+  })
+  .on("end", () => {
+    console.log("end");
+  });
+
+it.each([
+  { pick: (n: number) => n },
+  { pick: (n: number) => -n },
+])("picks %#", ({ pick }) => {
+  expect(pick(1)).toBeTruthy();
+});

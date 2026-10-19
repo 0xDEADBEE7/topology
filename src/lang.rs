@@ -188,7 +188,7 @@ const RUST: Spec = Spec {
     declarations: &[],
 };
 
-/// Python: lambdas fold into their function; docstrings document and are not code.
+/// Python: lambdas fold into their function; string statements document and are not code.
 const PYTHON: Spec = Spec {
     functions: &["function_definition"],
     closures: &["lambda"],

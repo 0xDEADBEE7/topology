@@ -5,7 +5,7 @@ pub struct FnMetrics {
     pub name: String,
     pub line_start: usize,
     pub line_end: usize,
-    /// Code lines the function owns: lines with a non-comment token outside nested units.
+    /// Code lines the function owns: those no smaller unit's range holds.
     pub loc: usize,
     pub cognitive: u32,
     pub has_docstring: bool,
@@ -22,7 +22,7 @@ pub struct ClassMetrics {
 pub struct FileMetrics {
     pub language: &'static str,
     pub path: String,
-    /// Code lines: lines with a token that is neither a comment nor a docstring.
+    /// Code lines: lines with text that is neither a comment nor a Python string statement.
     pub loc: usize,
     pub has_docstring: bool,
     /// Counts syntax-error nodes; nonzero means only the recoverable code was measured.

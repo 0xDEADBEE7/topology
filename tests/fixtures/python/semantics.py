@@ -42,3 +42,11 @@ class Shape:
             return 1
         except ValueError:
             return 2
+
+
+def page(title):
+    return """\
+<html>
+  <title>%s</title>
+</html>
+""" % title

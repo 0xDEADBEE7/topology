@@ -67,3 +67,9 @@ impl fmt::Display for Shape {
 fn new() -> Shape {
     Shape
 }
+
+fn usage() -> &'static str {
+    r#"
+usage: topo
+"#
+}

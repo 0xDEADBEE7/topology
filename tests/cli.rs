@@ -95,11 +95,15 @@ fn react_semantics_name_fold_and_rate_functions() {
             ("describe(\"store\")", 2, 0),
             ("it(\"increments\")", 5, 1),
             ("register(…)", 1, 0),
+            ("stream.on(\"data\")", 3, 0),
+            ("stream.on(…).on(\"end\")", 3, 0),
+            ("pick", 1, 0),
+            ("it.each(…)(\"picks %#\")", 4, 0),
         ],
     );
     assert_eq!(
         functions.len(),
-        15,
+        20,
         "callbacks must fold, not appear as <anonymous>"
     );
     let ids: std::collections::HashSet<_> = records.iter().map(|r| &r["id"]).collect();
@@ -122,6 +126,7 @@ fn rust_and_python_semantics_name_and_rate_functions() {
             ("Area::double", 3, 0),
             ("Shape::fmt", 3, 0),
             ("new", 3, 0),
+            ("usage", 5, 0),
         ],
     );
     assert_eq!(documented(path), ["sum_of_primes", "Shape::new"]);
@@ -135,6 +140,7 @@ fn rust_and_python_semantics_name_and_rate_functions() {
             ("get_words", 8, 1),
             ("mixed", 8, 8),
             ("Shape.area", 5, 1),
+            ("page", 6, 0),
         ],
     );
     assert_eq!(documented(path), ["sum_of_primes", "Shape.area"]);

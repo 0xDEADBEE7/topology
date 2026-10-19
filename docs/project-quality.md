@@ -44,9 +44,13 @@ Each file row shows its lines and whether it has a module doc, followed by its
 yellow and red functions (`--detail` lists every function). A summary line counts
 the yellow and red functions and the share of function lines they hold, plus doc
 coverage, and `~` marks partially parsed files. Extracted function records carry `loc`, `cognitive`
-and `band`. Code lines hold a token that is neither a comment nor a Python
-docstring; a function owns the code lines in its range outside named functions
-nested in it, and a file's lines are its code lines. Rust methods read
+and `band`. Code lines hold source text, string contents included, that is
+neither a comment nor a Python string statement (docstrings and strings used as
+comments). A function's range runs from its declaration (binding, export, wrapper
+call, or test call with its table) to the end of its body, but a callback passed
+to a method, as in `items.filter(...)`, starts at its arguments. Each code line
+belongs to the smallest range holding it, so functions never share lines, and a
+file's lines are its code lines. Rust methods read
 `Type::method` and Python methods `Class.method`; closures and lambdas fold into
 their function.
 
