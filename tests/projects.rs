@@ -243,7 +243,10 @@ fn commands_skip_unreadable_files_and_measure_broken_ones() {
     };
     #[cfg(unix)]
     lock(0o000);
-    let outputs = ["score", "extract", "tree"].map(|command| project.run(command));
+    let tree = Command::new(env!("CARGO_BIN_EXE_topo"))
+        .arg(&project.0)
+        .output();
+    let outputs = [project.run("score"), project.run("extract"), tree.unwrap()];
     #[cfg(unix)]
     lock(0o755);
     for output in outputs {
@@ -447,4 +450,63 @@ fn find_matches_qualified_names_and_the_tree_reads_a_linked_root() {
         std::os::unix::fs::symlink(project.0.join("src"), project.0.join("linked")).unwrap();
         assert!(topo(&["linked"]).contains("metrics.rs"));
     }
+}
+
+#[test]
+fn discovery_keeps_sources_and_skips_generated_and_installed_code() {
+    let project = Project::new();
+    for file in [
+        "src/bin/tool.rs",
+        "build/build.ts",
+        "src/App.selection.ts",
+        "real/r.rs",
+        "src/types.d.ts",
+        "src/app.min.js",
+        "venv/lib/v.py",
+        "lib/site-packages/s.py",
+        "__pycache__/c.py",
+        ".hidden/h.rs",
+        "README.md",
+    ] {
+        project.write(file, "export function f() {}\n");
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(project.0.join("real"), project.0.join("linked")).unwrap();
+    let topo = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+            .args(args)
+            .current_dir(&project.0)
+            .output()
+            .unwrap();
+        (
+            String::from_utf8(output.stdout).unwrap(),
+            String::from_utf8(output.stderr).unwrap(),
+        )
+    };
+    let files = |stdout: String| {
+        let records = stdout
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap());
+        let files = records.filter(|record: &serde_json::Value| record["type"] == "file");
+        files
+            .map(|record| record["path"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>()
+    };
+    let scanned = [
+        "build/build.ts",
+        "real/r.rs",
+        "src/App.selection.ts",
+        "src/bin/tool.rs",
+    ];
+    assert_eq!(files(topo(&["extract"]).0), scanned);
+    let (table, stderr) = topo(&["score", "src", "./src", "src/types.d.ts", "README.md"]);
+    assert!(
+        stderr.contains("README.md: skipped: unsupported language"),
+        "{stderr}"
+    );
+    for file in ["src/App.selection.ts", "src/bin/tool.rs", "src/types.d.ts"] {
+        assert_eq!(table.matches(&format!("│ {file} ")).count(), 1, "{table}");
+    }
+    #[cfg(unix)]
+    assert_eq!(files(topo(&["extract", "linked"]).0), ["r.rs"]);
 }

@@ -3,19 +3,21 @@
 use crate::metrics::{FileInfo, Unit};
 use std::{cmp::Reverse, collections::BTreeMap, fs, path::Path};
 
-/// Displays repository, file, or symbol detail according to the target path.
-pub fn inspect_with_options(target: &str, full_docstring: bool) -> Result<(), String> {
+/// Displays repository, file, or symbol detail according to the target path, returning
+/// false when a symbol is missing or ambiguous.
+pub fn inspect(target: &str) -> Result<bool, String> {
     if let Some((path, symbol)) = target.split_once("::") {
         return show_symbol(path, symbol);
     }
-    if Path::new(target).is_file() {
-        return show_file(target, full_docstring);
+    match Path::new(target).is_file() {
+        true => show_file(target)?,
+        false => run_directory(target)?,
     }
-    run_directory(target, full_docstring)
+    Ok(true)
 }
 
 /// Displays a repository tree with available descriptions.
-fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
+fn run_directory(root: &str) -> Result<(), String> {
     let canonical = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
     let files = crate::paths::analyse(&[&canonical], &canonical)?;
     let files = files.map(|file| (file.path, file.doc)).collect();
@@ -29,7 +31,7 @@ fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
             + parts.last().map_or(0, |name| name.chars().count())
     }));
     let root_doc = read_docstring(Path::new(root));
-    print_entry(&format!("{root_name}/"), root_doc, width, full_docstring);
+    print_entry(&format!("{root_name}/"), root_doc, width);
     for (index, (parts, description)) in entries.iter().enumerate() {
         let directory = entries
             .get(index + 1)
@@ -40,7 +42,7 @@ fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
             parts.last().map_or("", String::as_str),
             if directory { "/" } else { "" }
         );
-        print_entry(&prefix, description.clone(), width, full_docstring);
+        print_entry(&prefix, description.clone(), width);
     }
     Ok(())
 }
@@ -56,7 +58,7 @@ fn read_docstring(directory: &Path) -> Option<String> {
 }
 
 /// Displays a file description and its declaration outline.
-fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
+fn show_file(path: &str) -> Result<(), String> {
     let (_, file) = read(path)?;
     let mut units: Vec<_> = file.units().collect();
     units.sort_by_key(|(u, kind)| (u.line_start, Reverse(u.line_end), *kind == "function"));
@@ -75,9 +77,9 @@ fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
         })
         .collect();
     let width = align_width(rows.iter().map(|(prefix, _)| prefix.chars().count()));
-    print_entry(path, file.doc, width, full_docstring);
+    print_entry(path, file.doc, width);
     for (prefix, description) in rows {
-        print_entry(&prefix, description, width, full_docstring);
+        print_entry(&prefix, description, width);
     }
     Ok(())
 }
@@ -87,14 +89,29 @@ fn align_width(widths: impl Iterator<Item = usize>) -> usize {
     widths.filter(|width| *width <= 40).max().unwrap_or(0) + 2
 }
 
-/// Displays the source of a declaration found in the named file only.
-fn show_symbol(path: &str, name: &str) -> Result<(), String> {
+/// Displays the source of the declaration `name` in the named file only, or lists the
+/// candidates when several match equally well.
+fn show_symbol(path: &str, name: &str) -> Result<bool, String> {
     let (source, file) = read(path)?;
-    let (start, end) = (file.units().map(|(unit, _)| unit))
+    let named: Vec<_> = (file.units().map(|(unit, _)| unit))
         .filter(|unit| is_named(&unit.name, name))
-        .min_by_key(|unit| unit.name != name)
-        .map(|unit| (unit.line_start, unit.line_end))
-        .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
+        .collect();
+    let exact = named.iter().any(|unit| unit.name == name);
+    let best: Vec<_> = named
+        .iter()
+        .filter(|unit| !exact || unit.name == name)
+        .collect();
+    let [unit] = best[..] else {
+        eprintln!("{} declarations match {path}::{name}", best.len());
+        for unit in best {
+            println!(
+                "{path}::{} (L{}–{})",
+                unit.name, unit.line_start, unit.line_end
+            );
+        }
+        return Ok(false);
+    };
+    let (start, end) = (unit.line_start, unit.line_end);
     println!("{path}::{name} (L{start}–{end})");
     for line in source
         .lines()
@@ -103,7 +120,7 @@ fn show_symbol(path: &str, name: &str) -> Result<(), String> {
     {
         println!("{line}");
     }
-    Ok(())
+    Ok(true)
 }
 
 /// Reads and analyses one named file.
@@ -113,10 +130,11 @@ fn read(path: &str) -> Result<(String, FileInfo), String> {
     Ok((source, file))
 }
 
-/// Prints the declarations under the working directory that `query` names.
-pub fn find(query: &str) -> Result<(), String> {
+/// Prints the declarations under `directory` that `query` names, returning false when none
+/// does.
+pub fn find(query: &str, directory: &str) -> Result<bool, String> {
     let mut found = Vec::new();
-    for file in crate::paths::analyse(&["."], Path::new("."))? {
+    for file in crate::paths::analyse(&[directory], Path::new("."))? {
         let named = |(unit, _): &(&Unit, _)| matches(&file.path, &unit.name, query);
         let mut units: Vec<_> = file.units().filter(named).collect();
         units.sort_by_key(|(unit, _)| unit.line_start);
@@ -126,10 +144,10 @@ pub fn find(query: &str) -> Result<(), String> {
         }));
     }
     println!("{} matches for '{query}':", found.len());
-    for row in found {
+    for row in &found {
         println!("{row}");
     }
-    Ok(())
+    Ok(!found.is_empty())
 }
 
 /// Matches a declaration by name, or by `path::name` with or without the extension.
@@ -146,13 +164,8 @@ fn is_named(symbol: &str, query: &str) -> bool {
     symbol == query || symbol.rsplit(['.', ':']).next() == Some(query)
 }
 
-/// Fits a description beside a tree entry unless full text is requested.
-fn print_entry(
-    prefix: &str,
-    description: Option<String>,
-    target_width: usize,
-    full_docstring: bool,
-) {
+/// Fits a description beside a tree entry, cutting it to the line.
+fn print_entry(prefix: &str, description: Option<String>, target_width: usize) {
     match description {
         Some(description) => {
             let separator_width = target_width.saturating_sub(prefix.chars().count()).max(2);
@@ -160,12 +173,10 @@ fn print_entry(
             let available = 78usize
                 .saturating_sub(prefix.chars().count() + separator.chars().count())
                 .max(24);
-            let description = if full_docstring {
-                description
-            } else {
+            println!(
+                "{prefix}{separator}{}",
                 truncate_right(&description, available)
-            };
-            println!("{prefix}{separator}{description}");
+            );
         }
         None => println!("{prefix}"),
     }

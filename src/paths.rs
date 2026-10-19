@@ -1,24 +1,31 @@
 //! Discovers and analyses supported source files, excluding dependencies and build output.
 
-use crate::metrics::FileInfo;
+use crate::{lang::Language, metrics::FileInfo};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-/// Analyses every supported file under `targets` as it is iterated, naming each relative to
-/// `root` and skipping, with a warning, any that cannot be read.
+/// Analyses every supported file under `targets` as it is iterated, once each however it
+/// was spelt, naming each relative to `root` and skipping, with a warning, any that
+/// cannot be read or is not supported.
 pub fn analyse<'a>(
     targets: &[impl AsRef<Path>],
     root: &'a Path,
 ) -> Result<impl Iterator<Item = FileInfo> + 'a, String> {
     let mut paths = Vec::new();
-    for target in targets {
-        collect(target.as_ref(), &mut paths)?;
+    for target in targets.iter().map(AsRef::as_ref) {
+        let metadata = fs::metadata(target).map_err(|e| format!("{}: {e}", target.display()))?;
+        match metadata.is_dir() {
+            true => collect(target, &mut paths)?,
+            false => paths.push(target.to_owned()),
+        }
     }
+    let canonical = |path: &PathBuf| fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+    let mut paths: Vec<_> = paths.into_iter().map(|p| (canonical(&p), p)).collect();
     paths.sort();
-    paths.dedup();
-    let files = paths.into_iter().filter_map(move |path| {
+    paths.dedup_by(|a, b| a.0 == b.0);
+    let files = paths.into_iter().filter_map(move |(_, path)| {
         let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy();
         fs::read_to_string(&path)
             .map_err(|e| e.to_string())
@@ -29,20 +36,11 @@ pub fn analyse<'a>(
     Ok(files)
 }
 
-/// Collects source files deterministically without following symbolic links.
-fn collect(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
-    let metadata = fs::symlink_metadata(root).map_err(|e| format!("{}: {e}", root.display()))?;
-    if metadata.file_type().is_symlink() {
-        return Ok(());
-    }
-    if metadata.is_file() {
-        if crate::lang::Language::from_path(root).is_some() {
-            paths.push(root.to_owned());
-        }
-        return Ok(());
-    }
-    let mut children = fs::read_dir(root)
-        .map_err(|e| format!("{}: {e}", root.display()))?
+/// Collects a directory's supported files in name order, skipping hidden entries, symbolic
+/// links, excluded directories, TypeScript declarations and minified scripts.
+fn collect(directory: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
+    let mut children = fs::read_dir(directory)
+        .map_err(|e| format!("{}: {e}", directory.display()))?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
@@ -52,21 +50,40 @@ fn collect(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("");
-        if excluded(name) {
+        let metadata = fs::symlink_metadata(&path)
+            .ok()
+            .filter(|_| !name.starts_with('.'));
+        let Some(kind) = metadata.map(|metadata| metadata.file_type()) else {
             continue;
-        }
-        if let Err(error) = collect(&path, paths) {
-            eprintln!("warning: {error}; skipped");
+        };
+        if kind.is_dir() && !excluded(name) {
+            if let Err(error) = collect(&path, paths) {
+                eprintln!("warning: {error}; skipped");
+            }
+        } else if kind.is_file() && Language::from_path(&path).is_some() && !generated(name) {
+            paths.push(path);
         }
     }
     Ok(())
 }
 
-/// Keeps generated and third-party code out of repository assessments.
+/// Recognizes TypeScript declarations and minified scripts, which describe or repeat code
+/// written elsewhere.
+fn generated(name: &str) -> bool {
+    name.ends_with(".d.ts") || name.ends_with(".min.js")
+}
+
+/// Keeps generated, installed and third-party code out of directory scans.
 fn excluded(name: &str) -> bool {
-    name.starts_with('.')
-        || matches!(
-            name,
-            "target" | "node_modules" | "vendor" | "dist" | "build" | "bin" | "coverage"
-        )
+    matches!(
+        name,
+        "target"
+            | "node_modules"
+            | "vendor"
+            | "dist"
+            | "coverage"
+            | "venv"
+            | "__pycache__"
+            | "site-packages"
+    )
 }

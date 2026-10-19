@@ -26,14 +26,14 @@ fn topo(args: &[&str]) -> String {
 #[test]
 fn react_files_support_scoring_inspection_and_extraction() {
     let path = "tests/fixtures/typescript/components.tsx";
-    let score = topo(&["score", path, "--detail", "--no-colour"]);
+    let score = topo(&["score", path, "--detail"]);
     assert!(score.contains("Greeting"));
     assert!(
         !topo(&["score", path]).contains('\x1b'),
         "colour in piped output"
     );
     assert!(score.contains("App"));
-    let outline = topo(&["--full-docstring", path]);
+    let outline = topo(&[path]);
     assert!(outline.contains("Chooses the greeting content."));
     let records = topo(&["extract", "tests/fixtures/typescript"]);
     let values: Vec<serde_json::Value> = records
@@ -66,7 +66,7 @@ fn assert_units(records: &[serde_json::Value], expected: &[(&str, u64, u64)]) {
 
 /// Lists the functions the score table marks as documented.
 fn documented(path: &str) -> Vec<String> {
-    let table = topo(&["score", path, "--detail", "--no-colour"]);
+    let table = topo(&["score", path, "--detail"]);
     let rows = table.lines().filter(|row| row.ends_with("yes │"));
     let names = rows.filter_map(|row| row.strip_prefix("│   ")?.split(" (L").next());
     names.map(str::to_owned).collect()
@@ -399,7 +399,7 @@ fn partially_parsed_files_keep_their_functions() {
         ("generic-import.ts", "load"),
         ("call-signatures.ts", "create"),
         ("jsx-entity.tsx", "Search"),
-        ("anonymous-default.d.ts", "helper"),
+        ("anonymous-default.ts", "helper"),
         ("nul-template.ts", "separator"),
     ] {
         assert!(stderr.contains(file), "{file} parses now; drop the fixture");
@@ -457,4 +457,59 @@ fn project_meets_its_structural_quality_bands() {
         dependencies <= MAX_DEPENDENCIES,
         "{dependencies} dependencies"
     );
+}
+
+/// Help and the version print to stdout; exit 1 means nothing matched, 2 a usage error.
+#[test]
+fn commands_follow_the_exit_code_contract() {
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+            .args(args)
+            .output()
+            .unwrap();
+        let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
+        (
+            output.status.code(),
+            text(output.stdout),
+            text(output.stderr),
+        )
+    };
+    let (status, help, _) = run(&["--help"]);
+    assert_eq!(status, Some(0));
+    for command in [
+        "topo find",
+        "topo score",
+        "topo extract",
+        "--help",
+        "--version",
+    ] {
+        assert!(help.contains(command), "usage lists {command}");
+    }
+    let (status, version, _) = run(&["--version"]);
+    assert_eq!((status, version.starts_with("topo ")), (Some(0), true));
+    let found = run(&["find", "classify", "tests/fixtures/typescript"]);
+    let path = "tests/fixtures/typescript/basic.ts::classify [function] (L1–7)";
+    assert_eq!((found.0, found.1.contains(path)), (Some(0), true));
+    assert_eq!(
+        run(&["find", "nothing_here", "tests/fixtures/rust"]).0,
+        Some(1)
+    );
+    let (status, candidates, _) = run(&["tests/fixtures/rust/impls.rs::size"]);
+    assert_eq!(status, Some(1), "an ambiguous name lists its candidates");
+    assert_eq!(candidates.lines().count(), 4, "{candidates}");
+    assert!(candidates.contains("tests/fixtures/rust/impls.rs::Vec::size (L24–27)"));
+    assert_eq!(
+        run(&["tests/fixtures/typescript/basic.ts::missing"]).0,
+        Some(1)
+    );
+    for usage in [
+        &["src", "extra"][..],
+        &["--bogus"],
+        &["find"],
+        &["score", "--bogus"],
+    ] {
+        let (status, _, stderr) = run(usage);
+        assert_eq!(status, Some(2), "{usage:?}");
+        assert!(stderr.starts_with("error: "), "{usage:?}: {stderr}");
+    }
 }

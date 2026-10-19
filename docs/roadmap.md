@@ -1,6 +1,6 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0–M6 done.
+Status (October 2026): M0–M7 done.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
@@ -118,9 +118,19 @@ Status (October 2026): M0–M6 done.
   declarators in `const a = …, b = …` take the statement's doc; Python public names under
   a module-level `if`/`try` are not exported; `#[doc = "…"]` escapes are not decoded; a
   comment before a test label loses the label.
-- Size: `src` is 10 files, 1,789 physical and 1,485 code lines, all green. Budget 10
-  files and 1,500 code lines, the hard ceiling, so M7 must offset what it adds; yellow
-  share 0‰.
+- M7 verify: `topo` alone inspects `.`; `--help` prints the usage to stdout and exits 0;
+  `--version` prints the version; extra arguments, unknown options and `find` without a
+  name are usage errors (exit 2); `find <name> [dir]` and a missing `file::symbol` exit
+  1, and an ambiguous `file::symbol` lists every candidate and exits 1; `file::Type::method`
+  works. `--no-colour` (use `NO_COLOR`), `--full-docstring` and the `tree` alias are
+  gone. Discovery now scans `bin` and `build` (docusaurus's `src/commands/build/*.ts`
+  and three `bin` scripts are found, +29 functions), skips `*.d.ts` and `*.min.js` in
+  scans (68 corpus files) and venv, `site-packages` and `__pycache__`, reads a named
+  file whatever its name with a warning when unsupported, follows a named symbolic
+  link, and analyses a file once however it is spelt. Records for every other file are
+  unchanged, and 16 files remain partially parsed (5/5/0/6/0/0).
+- Size: `src` is 10 files and 1,498 code lines, all green. Budget 10 files and 1,500
+  code lines, the hard ceiling; yellow share 0‰.
 
 ## 1. Recommendation
 

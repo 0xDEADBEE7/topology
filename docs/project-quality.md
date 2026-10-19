@@ -17,10 +17,14 @@ callback passed after a string label becomes a unit named after its call, such a
 function that contains them. Assessment
 does not require installing or executing the target project's dependencies.
 
-Scoring and extraction share deterministic source discovery. Hidden entries,
-dependency folders (`node_modules`, `vendor`), build folders (`target`, `dist`,
-`build`, `bin`), and `coverage` are excluded. Symbolic links are not followed.
-Explicitly named directories are scanned even if their name is normally excluded.
+Every command shares one deterministic source discovery. Directory scans skip
+hidden entries, symbolic links, dependency and install folders (`node_modules`,
+`vendor`, `venv`, `site-packages`, `__pycache__`), build output (`target`, `dist`),
+`coverage`, TypeScript declarations (`*.d.ts`) and minified scripts (`*.min.js`);
+`bin` and `build` folders are scanned, since they often hold sources. A path named
+on the command line is always read: a directory even when its name is excluded or
+it is a symbolic link, and a file whatever its name, with a warning when its
+language is unsupported. A file reached through several spellings is analysed once.
 Every language is parsed with tree-sitter. A file with syntax errors is measured
 from the recovered tree; a warning names the file and its error count, and
 extraction records it as `parse_errors`. Every command skips a file or directory
