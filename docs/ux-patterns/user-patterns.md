@@ -75,7 +75,7 @@ This distinguishes exported entry points from private implementation details.
 ## Check cross-file dependencies
 
 ```bash
-topo extract . | jq -c 'select(.type == "import" and .path == "src/cli/mod.rs")'
+topo extract . | jq -c 'select(.type == "import" and .path == "src/main.rs")'
 ```
 
 Each import record shows its source, any locally resolved path, and whether it resolved.

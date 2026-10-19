@@ -36,19 +36,18 @@ impl Adapter for TypeScriptAdapter {
             .ok_or_else(|| "TypeScript parser returned no syntax tree".to_owned())?;
 
         let root = tree.root_node();
-        let mut raw = Vec::new();
+        let mut fns = Vec::new();
         let mut classes = Vec::new();
-        collect_declarations(root, source.as_bytes(), &mut raw, &mut classes);
-        let mut file = metrics::file(
+        collect_declarations(root, source.as_bytes(), &mut fns, &mut classes);
+        Ok(metrics::FileMetrics {
             language,
-            path,
-            &raw,
+            path: path.to_owned(),
+            loc: source.lines().count(),
+            has_docstring: crate::extract::module_doc(source).is_some(),
+            parse_errors: syntax_errors(root),
+            fns,
             classes,
-            crate::extract::module_doc(source).is_some(),
-            source.lines().count(),
-        );
-        file.parse_errors = syntax_errors(root);
-        Ok(file)
+        })
     }
 }
 

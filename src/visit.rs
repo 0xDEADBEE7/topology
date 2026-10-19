@@ -1,21 +1,12 @@
 //! Collects Rust declarations and delegates function-body measurements.
 
+use crate::metrics::{ClassMetrics, FnMetrics};
 use crate::visitor::BlockVisitor;
 use syn::{spanned::Spanned, visit::Visit, File, ImplItemFn, ItemFn, ItemStruct};
 
-#[derive(Debug, Default, Clone)]
-/// Carries a function's source location and cognitive count into metric computation.
-pub struct RawCounts {
-    pub name: String,
-    pub line_start: usize,
-    pub line_end: usize,
-    pub cognitive: u32,
-    pub has_docstring: bool,
-}
-
 struct FnVisitor {
-    raw: Vec<RawCounts>,
-    classes: Vec<crate::metrics::ClassMetrics>,
+    fns: Vec<FnMetrics>,
+    classes: Vec<ClassMetrics>,
 }
 
 impl FnVisitor {
@@ -27,9 +18,9 @@ impl FnVisitor {
         body: &syn::Block,
         has_docstring: bool,
     ) {
-        let mut bv = BlockVisitor::new();
+        let mut bv = BlockVisitor::default();
         bv.visit_block(body);
-        self.raw.push(RawCounts {
+        self.fns.push(FnMetrics {
             name: name.to_owned(),
             line_start,
             line_end,
@@ -52,7 +43,7 @@ impl<'ast> Visit<'ast> for FnVisitor {
     }
 
     fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
-        self.classes.push(crate::metrics::ClassMetrics {
+        self.classes.push(ClassMetrics {
             name: node.ident.to_string(),
             line_start: node.ident.span().start().line,
             line_end: node.span().end().line,
@@ -72,13 +63,13 @@ impl<'ast> Visit<'ast> for FnVisitor {
 }
 
 /// Collect Rust functions and structs while preserving source locations.
-pub fn collect(file: &File) -> (Vec<RawCounts>, Vec<crate::metrics::ClassMetrics>, bool) {
+pub fn collect(file: &File) -> (Vec<FnMetrics>, Vec<ClassMetrics>, bool) {
     let mut v = FnVisitor {
-        raw: Vec::new(),
+        fns: Vec::new(),
         classes: Vec::new(),
     };
     v.visit_file(file);
-    (v.raw, v.classes, has_doc_attr(&file.attrs))
+    (v.fns, v.classes, has_doc_attr(&file.attrs))
 }
 
 fn has_doc_attr(attrs: &[syn::Attribute]) -> bool {

@@ -23,25 +23,15 @@ pub(super) fn records(
     let language = analysed.language;
     let imports = imports::imports(root, repo, &relative, language, &source);
     let import_ids = imports.iter().map(|import| import.id.clone()).collect();
-    let exports = analysed
-        .fns
-        .iter()
-        .filter_map(|item| export(language, &source, item.line_start, item.line_end))
-        .chain(
-            analysed
-                .classes
-                .iter()
-                .filter_map(|item| export(language, &source, item.line_start, item.line_end)),
-        )
+    let exports = (analysed.fns.iter().map(|f| (f.line_start, f.line_end)))
+        .chain(analysed.classes.iter().map(|c| (c.line_start, c.line_end)))
+        .filter_map(|(start, end)| export(language, &source, start, end))
         .collect();
     let file = file_record(&relative, repo, &source, &analysed, import_ids, exports);
     let mut output = vec![serde_json::to_value(file).map_err(|e| e.to_string())?];
-    output.extend(
-        imports
-            .into_iter()
-            .map(|import| serde_json::to_value(import).map_err(|e| e.to_string()))
-            .collect::<Result<Vec<_>, _>>()?,
-    );
+    for import in imports {
+        output.push(serde_json::to_value(import).map_err(|e| e.to_string())?);
+    }
     for function in &analysed.fns {
         output.push(symbol(
             &relative, repo, language, &source, function, "function",
@@ -68,7 +58,7 @@ fn export(language: &str, source: &str, start: usize, end: usize) -> Option<Expo
     })
 }
 
-/// Combines file metadata with the adapter's aggregate measurements.
+/// Combines file metadata with the adapter's size and parse status.
 fn file_record(
     relative: &str,
     repo: &str,
@@ -77,7 +67,6 @@ fn file_record(
     imports: Vec<String>,
     exports: Vec<Export>,
 ) -> FileRecord {
-    let language = analysed.language;
     FileRecord {
         id: relative.to_owned(),
         record_type: "file",
@@ -87,7 +76,7 @@ fn file_record(
         imports,
         exports,
         metrics: Metrics {
-            language,
+            language: analysed.language,
             loc: analysed.loc,
             parse_errors: analysed.parse_errors,
         },

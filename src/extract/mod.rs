@@ -85,10 +85,10 @@ mod tests {
 
     #[test]
     fn splits_grouped_rust_imports() {
-        let imports = imports::parse("rust", "use crate::{metrics, visit::RawCounts};", 3);
+        let imports = imports::parse("rust", "use crate::{metrics, visit::collect};", 3);
         assert_eq!(imports.len(), 2);
         assert_eq!(imports[0].local_name.as_deref(), Some("metrics"));
-        assert_eq!(imports[1].local_name.as_deref(), Some("RawCounts"));
+        assert_eq!(imports[1].local_name.as_deref(), Some("collect"));
     }
 
     #[test]

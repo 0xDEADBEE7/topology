@@ -8,7 +8,7 @@
   syntax-classification, and complexity-counting modules
 
 Register each adapter and its extensions in `src/adapters/mod.rs`. Adapters return
-shared `FileMetrics`, so aggregation and reporting do not depend on a language.
+shared `FileMetrics`, so scoring and extraction do not depend on a language.
 
 TypeScript supports `.ts`, `.mts`, and `.cts`. React components use `.tsx` and
 the TSX grammar, which also parses JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`,

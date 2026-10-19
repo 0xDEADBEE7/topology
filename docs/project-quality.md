@@ -31,7 +31,7 @@ titles and directives such as `'use client'`. TypeScript and JavaScript score th
 Docs column with the same reader.
 
 `topo score` rates functions, not files. A function takes the worse of two bands
-(`topo score --guide` prints them):
+(`topo score --guide <path>` prints them):
 
 | Metric | Green | Yellow | Red |
 |---|---|---|---|
@@ -39,9 +39,9 @@ Docs column with the same reader.
 | Cognitive complexity | ≤ 10 | 11–15 | > 15 |
 
 Each file row shows its lines and whether it has a module doc, followed by its
-yellow and red functions (`--detail` lists every function). A summary line gives
-the share of function lines in yellow and red functions and doc coverage, and `~`
-marks partially parsed files. Extracted function records carry `loc`, `cognitive`
+yellow and red functions (`--detail` lists every function). A summary line counts
+the yellow and red functions and the share of function lines they hold, plus doc
+coverage, and `~` marks partially parsed files. Extracted function records carry `loc`, `cognitive`
 and `band`. Lines are physical lines until roadmap M5 counts code lines, and
 cognitive complexity still charges each `match`/`switch` arm until M3 and M5
 apply the SonarSource rules.

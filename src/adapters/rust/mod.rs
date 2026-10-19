@@ -14,14 +14,15 @@ impl Adapter for RustAdapter {
     /// Analyse Rust syntax using syn and the block visitor.
     fn analyse(&self, path: &str, source: &str) -> Result<metrics::FileMetrics, String> {
         let file = syn::parse_file(source).map_err(|error| format!("parse error: {error}"))?;
-        let (raw, classes, file_has_docstring) = visit::collect(&file);
-        Ok(metrics::file(
-            self.language(),
-            path,
-            &raw,
+        let (fns, classes, has_docstring) = visit::collect(&file);
+        Ok(metrics::FileMetrics {
+            language: self.language(),
+            path: path.to_owned(),
+            loc: source.lines().count(),
+            has_docstring,
+            parse_errors: 0,
+            fns,
             classes,
-            file_has_docstring,
-            source.lines().count(),
-        ))
+        })
     }
 }

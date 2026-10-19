@@ -103,17 +103,25 @@ fn parse_score_args(args: &[String]) -> Result<(Options, Vec<String>), String> {
     let mut options = Options::default();
     let mut paths = Vec::new();
     for arg in args {
-        match arg.as_str() {
-            "--detail" => options.detail = true,
-            "--guide" => options.guide = true,
-            "--no-colour" | "--no-color" => options.colour = false,
-            "--help" | "-h" => return Err(usage()),
-            value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
-            path => paths.push(path.to_owned()),
+        if !flag(arg, &mut options)? {
+            paths.push(arg.clone());
         }
     }
     if paths.is_empty() {
         return Err(usage());
     }
     Ok((options, paths))
+}
+
+/// Applies one score flag, returning false for a path.
+fn flag(arg: &str, options: &mut Options) -> Result<bool, String> {
+    match arg {
+        "--detail" => options.detail = true,
+        "--guide" => options.guide = true,
+        "--no-colour" | "--no-color" => options.colour = false,
+        "--help" | "-h" => return Err(usage()),
+        value if value.starts_with('-') => return Err(format!("unknown option: {value}")),
+        _ => return Ok(false),
+    }
+    Ok(true)
 }

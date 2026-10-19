@@ -23,24 +23,24 @@ pub(super) fn leading_docs(lines: &[&str]) -> Option<String> {
     let mut index = 0;
     while let Some(line) = lines.get(index).map(|line| line.trim()) {
         index += 1;
-        let text = if let Some(first) = line.strip_prefix("//!") {
-            line_docs(lines, &mut index, first)
-        } else if is_preamble(line) {
+        if is_preamble(line) && !line.starts_with("//!") {
             continue;
-        } else if let Some((open, close, documents)) =
-            BLOCKS.iter().find(|(open, ..)| line.starts_with(open))
-        {
-            block_docs(lines, &mut index, &line[open.len()..], close)
-                .filter(|_| *documents)
-                .unwrap_or_default()
-        } else {
-            return None;
-        };
-        if let Some(summary) = summary(&text) {
+        }
+        if let Some(summary) = summary(&next_block(lines, &mut index, line)?) {
             return Some(summary);
         }
     }
     None
+}
+
+/// Reads the comment block or docstring starting on `line`; None when the line is code.
+fn next_block<'a>(lines: &[&'a str], index: &mut usize, line: &'a str) -> Option<Vec<&'a str>> {
+    if let Some(first) = line.strip_prefix("//!") {
+        return Some(line_docs(lines, index, first));
+    }
+    let (open, close, documents) = BLOCKS.iter().find(|(open, ..)| line.starts_with(open))?;
+    let text = block_docs(lines, index, &line[open.len()..], close);
+    Some(text.filter(|_| *documents).unwrap_or_default())
 }
 
 /// Recognizes lines that may precede module documentation: blanks, comments,

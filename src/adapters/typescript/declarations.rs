@@ -4,20 +4,20 @@ use super::{
     counts::cognitive,
     syntax::{is_class, is_function},
 };
-use crate::visit::RawCounts;
+use crate::metrics::{ClassMetrics, FnMetrics};
 use tree_sitter::Node;
 
 /// Collects each function independently, including nested callbacks.
 pub(super) fn collect_declarations(
     node: Node<'_>,
     source: &[u8],
-    functions: &mut Vec<RawCounts>,
-    classes: &mut Vec<crate::metrics::ClassMetrics>,
+    functions: &mut Vec<FnMetrics>,
+    classes: &mut Vec<ClassMetrics>,
 ) {
     if is_function(node.kind()) {
         functions.push(count_function(node, source));
     } else if is_class(node.kind()) {
-        classes.push(crate::metrics::ClassMetrics {
+        classes.push(ClassMetrics {
             name: node
                 .child_by_field_name("name")
                 .and_then(|name| name.utf8_text(source).ok())
@@ -45,9 +45,9 @@ fn has_preceding_comment(node: Node<'_>, source: &[u8]) -> bool {
 }
 
 /// Measures the body while retaining its declaration's source extent.
-fn count_function(node: Node<'_>, source: &[u8]) -> RawCounts {
+fn count_function(node: Node<'_>, source: &[u8]) -> FnMetrics {
     let body = node.child_by_field_name("body");
-    RawCounts {
+    FnMetrics {
         name: function_name(node, source),
         line_start: documented_node(node).start_position().row + 1,
         line_end: node.end_position().row + 1,

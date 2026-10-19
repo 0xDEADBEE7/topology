@@ -5,6 +5,7 @@ use syn::{
     ExprForLoop, ExprIf, ExprMatch, ExprWhile,
 };
 
+#[derive(Default)]
 /// Walks inside a single function body accumulating cognitive increments.
 pub struct BlockVisitor {
     depth: u32,
@@ -12,14 +13,6 @@ pub struct BlockVisitor {
 }
 
 impl BlockVisitor {
-    /// Starts an independent function-body measurement.
-    pub fn new() -> Self {
-        Self {
-            depth: 0,
-            cognitive: 0,
-        }
-    }
-
     fn branch(&mut self) {
         self.cognitive += 1 + self.depth;
     }

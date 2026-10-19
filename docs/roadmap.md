@@ -14,15 +14,13 @@ Status (October 2026): M0, M1 and M2 done.
   already fixes excalidraw's 31 wrong-file imports ahead of M6.
 - M2 verify: NMI, Halstead and CC are gone from code, output and JSONL; function records
   gain `band`; every function's lines and cognitive value are unchanged on the corpus.
-  topo scores 0% red and 2.5% yellow function lines on itself (the yellow functions are
-  `leading_docs` and `parse_score_args`, the latter only because the Rust counter still
-  charges each `match` arm). On the React repos, 38–55% of function lines sit in red
-  functions; 65–94% of those lines are `<anonymous>`, and 83–99% of the anonymous ones
-  are test `describe(...)` callbacks of 700–5,000 lines (M3's test-block units and
-  decision 7 address them).
+  topo scores all green on itself, so the yellow ceiling starts at 0. Red shares on the
+  React repos: bulletproof-react 17%, docusaurus 39%, zustand 51%, excalidraw 55%. Of
+  those red lines 36–94% are `<anonymous>`, and 82–99% of the anonymous ones are test
+  `describe(...)` callbacks (M3's test-block units and decision 7 address them).
 - Python and Rust still score the Docs column with their own heuristics until M5.
-- Size: `src` is 34 files and 2,267 lines (M2 −320, beyond its −170 to −230 estimate);
-  budget 34 files, 2,402 lines (M3 plans +80 to +110), yellow share ≤ 26‰.
+- Size: `src` is 34 files and 2,200 lines (M2 −387, beyond its −170 to −230 estimate);
+  budget 34 files, 2,335 lines (M3 plans +80 to +110), yellow share 0‰.
 
 ## 1. Recommendation
 
@@ -97,10 +95,12 @@ The flags `--metrics`, `--all-metrics` and `--functions` are removed too.
   bodies is not measured.
 
 **Shown but never rated:**
-- Per file: lines, function count, worst function (coloured by its own band), module doc
-  yes/no, and a `~` marker for partially parsed files.
-- Summary line: percentage of function lines in yellow and in red functions, plus doc
-  coverage.
+- Per file: lines, module doc yes/no, and a `~` marker for partially parsed files, followed
+  by every yellow and red function with its lines and cognitive complexity coloured
+  (`--detail` lists all functions). This replaces the planned function count and single
+  worst-function column: it names every risky function without widening the table.
+- Summary line: counts of yellow and red functions and the share of function lines they
+  hold, plus doc coverage.
 - One `BANDS` constant in report.rs drives the colours, the guide text and a `band` field
   in the JSONL output.
 

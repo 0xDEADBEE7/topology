@@ -251,6 +251,42 @@ fn tree_descriptions_skip_licenses_pragmas_and_headings() {
 }
 
 #[test]
+fn bands_rate_lines_and_cognitive_at_their_boundaries() {
+    let project = Project::new();
+    let mut source = String::new();
+    for lines in [60, 61, 70, 71] {
+        let body = "  x();\n".repeat(lines - 2);
+        source += &format!("function lines{lines}() {{\n{body}}}\n");
+    }
+    for ifs in [10, 11, 15, 16] {
+        source += &format!(
+            "function cognitive{ifs}() {{ {}}}\n",
+            "if (x) {} ".repeat(ifs)
+        );
+    }
+    project.write("bands.ts", &source);
+    let records: Vec<serde_json::Value> = String::from_utf8(project.run("extract").stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for (name, band) in [
+        ("lines60", "green"),
+        ("lines61", "yellow"),
+        ("lines70", "yellow"),
+        ("lines71", "red"),
+        ("cognitive10", "green"),
+        ("cognitive11", "yellow"),
+        ("cognitive15", "yellow"),
+        ("cognitive16", "red"),
+    ] {
+        let band_of = |record: &&serde_json::Value| record["name"] == name;
+        let record = records.iter().find(band_of).expect(name);
+        assert_eq!(record["metrics"]["band"], band, "{name}");
+    }
+}
+
+#[test]
 fn symbol_descriptions_include_preceding_rust_and_jsdoc_comments() {
     let project = Project::new();
     project.write(

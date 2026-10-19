@@ -41,7 +41,7 @@ impl Band {
 
 /// Rates a function by the worse of its lines and cognitive complexity bands.
 pub fn function_band(f: &FnMetrics) -> Band {
-    Band::of(f.loc, BANDS[0]).max(Band::of(f.cognitive as usize, BANDS[1]))
+    Band::of(f.loc(), BANDS[0]).max(Band::of(f.cognitive as usize, BANDS[1]))
 }
 
 /// Controls function detail, the guide, and terminal colour.
@@ -69,11 +69,7 @@ pub fn print_table(files: &[FileMetrics], options: &Options) {
     let mut rows = Vec::new();
     for file in files {
         let partial = if file.parse_errors > 0 { " ~" } else { "" };
-        let cells = vec![
-            plain(file.loc),
-            plain(""),
-            plain(yes_no(file.has_docstring)),
-        ];
+        let cells = vec![plain(file.loc), plain(""), doc(file.has_docstring)];
         rows.push((format!("{}{partial}", file.path), cells, true));
         for f in &file.fns {
             if options.detail || function_band(f) != Band::Green {
@@ -90,14 +86,11 @@ pub fn print_table(files: &[FileMetrics], options: &Options) {
 }
 
 fn function_cells(f: &FnMetrics) -> Vec<(String, &'static str)> {
-    let cognitive = f.cognitive as usize;
+    let (loc, cog) = (f.loc(), f.cognitive as usize);
     vec![
-        (f.loc.to_string(), Band::of(f.loc, BANDS[0]).colour()),
-        (
-            cognitive.to_string(),
-            Band::of(cognitive, BANDS[1]).colour(),
-        ),
-        plain(yes_no(f.has_docstring)),
+        (loc.to_string(), Band::of(loc, BANDS[0]).colour()),
+        (cog.to_string(), Band::of(cog, BANDS[1]).colour()),
+        doc(f.has_docstring),
     ]
 }
 
@@ -105,55 +98,47 @@ fn plain(value: impl ToString) -> (String, &'static str) {
     (value.to_string(), "")
 }
 
-fn yes_no(present: bool) -> &'static str {
-    if present {
-        "yes"
-    } else {
-        "no"
-    }
+fn doc(present: bool) -> (String, &'static str) {
+    plain(if present { "yes" } else { "no" })
 }
 
 /// Summarizes the risk profile, documentation coverage, and partially parsed files.
 fn summary(files: &[FileMetrics]) -> String {
     let fns: Vec<&FnMetrics> = files.iter().flat_map(|file| &file.fns).collect();
-    let lines = fns.iter().map(|f| f.loc).sum::<usize>().max(1) as f64;
-    let share = |band| {
-        let banded = fns.iter().filter(|f| function_band(f) == band);
-        100.0 * banded.map(|f| f.loc).sum::<usize>() as f64 / lines
+    let lines = fns.iter().map(|f| f.loc()).sum::<usize>().max(1) as f64;
+    let count_and_share = |band| {
+        let banded: Vec<_> = fns.iter().filter(|f| function_band(f) == band).collect();
+        let share = 100.0 * banded.iter().map(|f| f.loc()).sum::<usize>() as f64 / lines;
+        (banded.len(), share)
     };
+    let (yellow, yellow_share) = count_and_share(Band::Yellow);
+    let (red, red_share) = count_and_share(Band::Red);
     let documented = fns.iter().filter(|f| f.has_docstring).count();
     let modules = files.iter().filter(|file| file.has_docstring).count();
-    let partial = files.iter().filter(|file| file.parse_errors > 0).count();
+    let partial = match files.iter().filter(|file| file.parse_errors > 0).count() {
+        0 => String::new(),
+        n => format!("; ~ marks {n} partially parsed"),
+    };
     format!(
-        "{} files, {} functions: {:.1}% of function lines in yellow functions, {:.1}% in red; \
-         docs on {modules}/{} files and {documented}/{} functions{}",
+        "{0} files, {1} functions; {yellow} yellow and {red} red functions hold {yellow_share:.1}% \
+         and {red_share:.1}% of function lines; docs on {modules}/{0} files and {documented}/{1} \
+         functions{partial}",
         files.len(),
         fns.len(),
-        share(Band::Yellow),
-        share(Band::Red),
-        files.len(),
-        fns.len(),
-        if partial > 0 {
-            format!("; ~ marks {partial} partially parsed")
-        } else {
-            String::new()
-        },
     )
 }
 
 /// Prints the bands that rate each function.
 pub fn print_guide(colour: bool) {
     let headers = ["Function metric", "Green", "Yellow", "Red"].map(str::to_owned);
-    let rows: Vec<_> = (BANDS.iter())
-        .map(|&(name, green, yellow)| {
-            let cells = vec![
-                (format!("<= {green}"), GREEN),
-                (format!("{}-{yellow}", green + 1), YELLOW),
-                (format!("> {yellow}"), RED),
-            ];
-            (name.to_owned(), cells, true)
-        })
-        .collect();
+    let rows = BANDS.map(|(name, green, yellow)| {
+        let cells = vec![
+            (format!("<= {green}"), GREEN),
+            (format!("{}-{yellow}", green + 1), YELLOW),
+            (format!("> {yellow}"), RED),
+        ];
+        (name.to_owned(), cells, true)
+    });
     table::print(&headers, &rows, colour, false);
     println!("A function takes its worst band. File lines and docs are shown, not rated.");
 }

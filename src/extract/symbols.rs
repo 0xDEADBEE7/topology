@@ -7,17 +7,14 @@ use super::{
 use crate::metrics::{ClassMetrics, FnMetrics};
 
 /// Builds a declaration record while preserving its metric shape.
-pub(super) fn symbol<T>(
+pub(super) fn symbol(
     path: &str,
     repo: &str,
     language: &str,
     source: &str,
-    item: &T,
+    item: &impl Item,
     kind: &'static str,
-) -> Result<serde_json::Value, String>
-where
-    T: Item,
-{
+) -> Result<serde_json::Value, String> {
     serde_json::to_value(SymbolRecord {
         id: format!("{}#{}:{}:{}", path, kind, item.name(), item.start()),
         record_type: kind,
@@ -57,7 +54,7 @@ impl Item for FnMetrics {
     }
     fn metrics(&self) -> Option<SymbolMetrics> {
         Some(SymbolMetrics {
-            loc: self.loc,
+            loc: self.loc(),
             cognitive: self.cognitive,
             band: crate::report::function_band(self).name(),
         })

@@ -21,7 +21,7 @@ pub(super) struct ImportRecord {
 }
 
 #[derive(Serialize)]
-/// Describes a source file, its dependencies, and its aggregate metrics.
+/// Describes a source file, its imports and exports, and its size.
 pub(super) struct FileRecord {
     pub(super) id: String,
     #[serde(rename = "type")]
