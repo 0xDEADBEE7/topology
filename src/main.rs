@@ -21,7 +21,7 @@ extern "C" {
 /// Every command form, printed by `--help` and with a usage error.
 const USAGE: &str = "usage: topo [<path> | <file>::<symbol>]
        topo find <name> [<dir>]
-       topo score [--detail] [--guide] [<path>...]
+       topo score [--detail] [--guide] [--tests] [<path>...]
        topo extract [<path>]
        topo --help | --version";
 
@@ -62,14 +62,16 @@ fn run(args: Vec<OsString>) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Scores the given paths (the working directory by default), skipping unreadable files.
+/// Scores the given paths (the working directory by default), skipping unreadable files
+/// and, unless `--tests` is given, the tests a directory scan finds.
 fn score(args: &[&str]) -> Result<(), String> {
-    let mut options = Options::default();
+    let (mut options, mut tests) = (Options::default(), false);
     let mut paths = Vec::new();
     for arg in args {
         match *arg {
             "--detail" => options.detail = true,
             "--guide" => options.guide = true,
+            "--tests" => tests = true,
             flag if flag.starts_with('-') => return Err(format!("unknown option: {flag}")),
             path => paths.push(path),
         }
@@ -77,7 +79,7 @@ fn score(args: &[&str]) -> Result<(), String> {
     if paths.is_empty() {
         paths.push(".");
     }
-    let analysed: Vec<_> = paths::analyse(&paths, Path::new("."))?.collect();
+    let analysed: Vec<_> = paths::analyse(&paths, Path::new("."), tests)?.collect();
     if analysed.is_empty() {
         return Err("no supported source files could be analysed".to_owned());
     }

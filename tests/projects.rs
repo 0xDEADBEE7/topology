@@ -521,3 +521,62 @@ fn discovery_keeps_sources_and_skips_generated_and_installed_code() {
             .contains("linked/r.rs::f [function]"));
     }
 }
+
+#[test]
+fn scans_follow_git_ignores_and_score_skips_tests_unless_asked() {
+    let project = Project::new();
+    for file in [
+        "src/real.ts",
+        "src/a.test.ts",
+        "src/b.spec.tsx",
+        "src/c.stories.tsx",
+        "src/__tests__/d.ts",
+        "src/__mocks__/e.ts",
+        "tests/f.rs",
+        "e2e/g.ts",
+        "pkg/test_h.py",
+        "pkg/i_test.py",
+        "pkg/conftest.py",
+        "ignored/j.rs",
+    ] {
+        project.write(file, "export function f() {}\n");
+    }
+    project.write(".gitignore", "ignored/\n");
+    let topo = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+            .args(args)
+            .current_dir(&project.0)
+            .output()
+            .unwrap();
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let rows = |table: String| table.lines().filter(|row| row.starts_with("│ ")).count() - 1;
+    assert_eq!(
+        rows(topo(&["score"])),
+        2,
+        "real.ts and ignored/j.rs outside git"
+    );
+    let git = Command::new("git")
+        .arg("init")
+        .arg("-q")
+        .current_dir(&project.0)
+        .status();
+    if !git.is_ok_and(|status| status.success()) {
+        return;
+    }
+    assert!(topo(&["score"]).contains("│ src/real.ts "));
+    assert_eq!(rows(topo(&["score"])), 1, "git ignores ignored/");
+    assert_eq!(rows(topo(&["score", "--tests"])), 11);
+    assert_eq!(
+        rows(topo(&["score", "tests"])),
+        1,
+        "a named folder is scored"
+    );
+    assert_eq!(
+        topo(&["extract"])
+            .lines()
+            .filter(|l| l.contains("\"type\":\"file\""))
+            .count(),
+        11
+    );
+}

@@ -129,7 +129,20 @@ Status (October 2026): M0–M7 done.
   file whatever its name with a warning when unsupported, follows a named symbolic
   link, and analyses a file once however it is spelt. Records for every other file are
   unchanged, and 16 files remain partially parsed (5/5/0/6/0/0).
-- Size: `src` is 10 files and 1,498 code lines, all green. Budget 10 files and 1,500
+- M7 review (15 of 21 findings confirmed, all fixed): every exact `file::symbol` match is
+  shown (two `fmt` impls were unreachable); options after `find` and `extract` and
+  non-Unicode arguments are usage errors; a named FIFO no longer hangs; the first
+  spelling of a file wins; unreadable entries warn again. A simplification pass then
+  removed 87 lines with byte-identical output (walk.rs 382 → 345, syntax.rs 249 → 223).
+- Decisions 5 and 7, approved by the owner: directory scans list files with
+  `git ls-files -co --exclude-standard` and fall back to a walk outside a repository
+  (corpus extract and tree output unchanged, since the checkouts are clean), and
+  `score` leaves out tests, mocks and stories unless `--tests` is given. Scored files,
+  before → after: excalidraw 695 → 539, docusaurus 1,141 → 810, bulletproof-react
+  428 → 349, zustand 49 → 34, requests 37 → 22, ripgrep 110 → 92. Red shares rise
+  (excalidraw 32.7% → 44.6%, zustand 12.8% → 25.9%, requests 10.2% → 21.6%) because
+  mostly green test units no longer dilute the production code's.
+- Size: `src` is 10 files and 1,420 code lines, all green. Budget 10 files and 1,500
   code lines, the hard ceiling; yellow share 0‰.
 
 ## 1. Recommendation
@@ -390,9 +403,11 @@ and serde_json. Tests are about 500 lines and do not count toward the budget.
    `nested_functions_have_independent_complexity`).
 3. Treat the extract JSONL as internal and change it freely under a contract test — yes.
 4. Import resolution: relative imports only (alternative: raw specifiers only).
-5. Discovery via `git ls-files -co --exclude-standard` with the directory walk as fallback.
+5. Discovery via `git ls-files -co --exclude-standard` with the directory walk as fallback
+   (applied in M7).
 6. Describe undocumented files in the tree by their exported names.
-7. `score` skips tests and stories by default, with `--tests` to include them.
+7. `score` skips tests and stories by default, with `--tests` to include them (applied in
+   M7).
 8. tree-sitter 0.25.10, the mature release (0.27.1 is newer; both need Rust 1.90 because
    the shared grammar runtime, tree-sitter-language 0.1.9, does).
 9. SIGPIPE: a small `unsafe` reset (alternative: the safe `writeln!` route).

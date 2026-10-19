@@ -16,7 +16,7 @@ pub fn run(target: &str) -> Result<(), String> {
     let target = fs::canonicalize(target).map_err(|e| format!("{target}: {e}"))?;
     let root = target.parent().filter(|_| target.is_file());
     let root = root.unwrap_or(&target);
-    for file in crate::paths::analyse(&[&target], root)? {
+    for file in crate::paths::analyse(&[&target], root, true)? {
         for record in records(root, &file) {
             println!("{record}");
         }

@@ -19,7 +19,7 @@ pub fn inspect(target: &str) -> Result<bool, String> {
 /// Displays a repository tree with available descriptions.
 fn run_directory(root: &str) -> Result<(), String> {
     let canonical = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
-    let files = crate::paths::analyse(&[&canonical], &canonical)?;
+    let files = crate::paths::analyse(&[&canonical], &canonical, true)?;
     let files = files.map(|file| (file.path, file.doc)).collect();
     let root_name = Path::new(root)
         .file_name()
@@ -129,7 +129,7 @@ fn read(path: &str) -> Result<(String, FileInfo), String> {
 /// does.
 pub fn find(query: &str, directory: &str) -> Result<bool, String> {
     let mut found = Vec::new();
-    for file in crate::paths::analyse(&[directory], Path::new("."))? {
+    for file in crate::paths::analyse(&[directory], Path::new("."), true)? {
         let named = |(unit, _): &(&Unit, _)| matches(&file.path, &unit.name, query);
         let mut units: Vec<_> = file.units().filter(named).collect();
         units.sort_by_key(|(unit, _)| unit.line_start);
