@@ -48,35 +48,55 @@ fn react_files_support_scoring_inspection_and_extraction() {
     }
 }
 
+fn records(path: &str) -> Vec<serde_json::Value> {
+    topo(&["extract", path])
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+/// Asserts the code lines and cognitive complexity of each named function.
+fn assert_units(records: &[serde_json::Value], expected: &[(&str, u64, u64)]) {
+    for (name, loc, cognitive) in expected {
+        let record = records.iter().find(|r| r["name"] == *name).expect(name);
+        let metrics = (&record["metrics"]["loc"], &record["metrics"]["cognitive"]);
+        assert_eq!(metrics, (&(*loc).into(), &(*cognitive).into()), "{name}");
+    }
+}
+
+/// Lists the functions the score table marks as documented.
+fn documented(path: &str) -> Vec<String> {
+    let table = topo(&["score", path, "--detail", "--no-colour"]);
+    let rows = table.lines().filter(|row| row.ends_with("yes │"));
+    let names = rows.filter_map(|row| row.strip_prefix("│   ")?.split(" (L").next());
+    names.map(str::to_owned).collect()
+}
+
 /// Names, folds and rates React and plain functions as roadmap M3 and SonarSource 1.7 specify.
 #[test]
 fn react_semantics_name_fold_and_rate_functions() {
     let path = "tests/fixtures/typescript/semantics.tsx";
-    let records: Vec<serde_json::Value> = topo(&["extract", path])
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect();
+    let records = records(path);
     let functions: Vec<_> = records.iter().filter(|r| r["type"] == "function").collect();
-    for (name, loc, cognitive) in [
-        ("Button", 3, 0),
-        ("Card", 1, 0),
-        ("List", 8, 4),
-        ("select", 1, 1),
-        ("default", 1, 0),
-        ("Store.increment", 3, 0),
-        ("Store.reset", 3, 0),
-        ("onSave", 1, 0),
-        ("sumOfPrimes", 12, 7),
-        ("getWords", 10, 1),
-        ("classify", 9, 5),
-        ("describe(\"store\")", 2, 0),
-        ("it(\"increments\")", 5, 1),
-        ("register(…)", 1, 0),
-    ] {
-        let record = functions.iter().find(|r| r["name"] == name).expect(name);
-        let metrics = (&record["metrics"]["loc"], &record["metrics"]["cognitive"]);
-        assert_eq!(metrics, (&loc.into(), &cognitive.into()), "{name}");
-    }
+    assert_units(
+        &records,
+        &[
+            ("Button", 3, 0),
+            ("Card", 1, 0),
+            ("List", 8, 4),
+            ("select", 1, 1),
+            ("default", 1, 0),
+            ("Store.increment", 3, 0),
+            ("Store.reset", 3, 0),
+            ("onSave", 1, 0),
+            ("sumOfPrimes", 12, 7),
+            ("getWords", 10, 1),
+            ("classify", 9, 5),
+            ("describe(\"store\")", 2, 0),
+            ("it(\"increments\")", 5, 1),
+            ("register(…)", 1, 0),
+        ],
+    );
     assert_eq!(
         functions.len(),
         15,
@@ -85,6 +105,40 @@ fn react_semantics_name_fold_and_rate_functions() {
     let ids: std::collections::HashSet<_> = records.iter().map(|r| &r["id"]).collect();
     assert_eq!(ids.len(), records.len(), "ids must be unique");
     assert!(topo(&[path]).contains("\n    Store.increment (L25–27)"));
+}
+
+/// Rust and Python units follow the same naming, documentation and SonarSource rules.
+#[test]
+fn rust_and_python_semantics_name_and_rate_functions() {
+    let path = "tests/fixtures/rust/semantics.rs";
+    assert_units(
+        &records(path),
+        &[
+            ("sum_of_primes", 12, 7),
+            ("get_words", 8, 1),
+            ("mixed", 11, 9),
+            ("Shape::new", 4, 0),
+            ("helper", 3, 0),
+            ("Area::double", 3, 0),
+            ("Shape::fmt", 3, 0),
+            ("new", 3, 0),
+        ],
+    );
+    assert_eq!(documented(path), ["sum_of_primes", "Shape::new"]);
+    assert!(topo(&[&format!("{path}::Shape::new")]).contains("pub fn new() -> Self {"));
+    assert!(topo(&[&format!("{path}::new")]).contains("fn new() -> Shape {"));
+    let path = "tests/fixtures/python/semantics.py";
+    assert_units(
+        &records(path),
+        &[
+            ("sum_of_primes", 8, 6),
+            ("get_words", 8, 1),
+            ("mixed", 8, 8),
+            ("Shape.area", 5, 1),
+        ],
+    );
+    assert_eq!(documented(path), ["sum_of_primes", "Shape.area"]);
+    assert!(topo(&[&format!("{path}::Shape.area")]).contains("def area(self):"));
 }
 
 /// Pins the extract record shapes; regenerate basic.jsonl only for a deliberate change.
