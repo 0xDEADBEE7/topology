@@ -343,9 +343,10 @@ fn extract_output_matches_its_contract() {
     );
 }
 
-/// Size budget for `src` in files and code lines: lower it as the code shrinks, never raise it.
+/// Size budget for `src` in files and code lines: the size at release 0.2.0 rounded up to
+/// the next 25. Lower it as the code shrinks; never raise it.
 const MAX_FILES: usize = 9;
-const MAX_LINES: u64 = 1_500;
+const MAX_LINES: u64 = 1_425;
 const MAX_DEPENDENCIES: usize = 5;
 /// Largest share of function lines in yellow functions, per mille; ratchets down.
 const MAX_YELLOW_PER_MILLE: u64 = 0;
