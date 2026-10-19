@@ -1,175 +1,88 @@
-//! Command-line entry point for per-file metrics and repository extraction.
+//! Dispatches progressive inspection, scoring, and extraction commands.
 
-mod adapters;
 mod extract;
-mod metrics;
+mod lang;
+mod paths;
 mod report;
+mod syntax;
 mod table;
 mod tree;
-mod visit;
-mod visitor;
+mod walk;
 
-use std::{env, fs};
+use report::Options;
+use std::{ffi::OsString, path::Path};
 
-fn collect_paths(path: &str, files: &mut Vec<String>) {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) => {
-            eprintln!("error reading {path}: {error}");
-            return;
-        }
-    };
-    if !metadata.is_dir() {
-        files.push(path.to_owned());
-        return;
-    }
-
-    let entries = match fs::read_dir(path) {
-        Ok(entries) => entries,
-        Err(error) => {
-            eprintln!("error reading {path}: {error}");
-            return;
-        }
-    };
-    let mut children: Vec<_> = entries.filter_map(Result::ok).collect();
-    children.sort_by_key(|entry| entry.path());
-    for entry in children {
-        let child = entry.path();
-        collect_paths(&child.to_string_lossy(), files);
-    }
+#[cfg(unix)]
+extern "C" {
+    fn signal(signum: i32, handler: usize) -> usize;
 }
 
-fn analyse(path: &str) -> Option<metrics::FileMetrics> {
-    let adapter = match adapters::for_path(path) {
-        Ok(adapter) => adapter,
-        Err(_) => return None,
-    };
-    let src = match fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("error reading {path}: {e}");
-            return None;
-        }
-    };
-    match adapter.analyse(path, &src) {
-        Ok(metrics) => Some(metrics),
-        Err(e) => {
-            eprintln!("{path}: {e}");
-            None
-        }
-    }
-}
+/// Every command form, printed by `--help` and with a usage error.
+const USAGE: &str = "usage: topo [<path> | <file>::<symbol>]
+       topo find <name> [<dir>]
+       topo score [--detail] [--guide] [--tests] [<path>...]
+       topo extract [<path>]
+       topo --help | --version";
 
-fn usage() -> ! {
-    eprintln!("usage: topo [--full-docstring] <path|path::symbol>");
-    eprintln!("       topo find <symbol>");
-    eprintln!("       topo score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]");
-    eprintln!("       topo extract <dir>");
-    std::process::exit(1);
-}
-
+/// Runs one command and exits 0 on success, 1 when nothing matched and 2 on an error.
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
-    let full_docstring = args.iter().any(|arg| arg == "--full-docstring");
-    let args: Vec<String> = args
-        .into_iter()
-        .filter(|arg| arg != "--full-docstring")
-        .collect();
-    match args.first().map(String::as_str) {
-        Some("extract") => {
-            let root = args.get(1).cloned().unwrap_or_else(|| ".".to_owned());
-            if let Err(error) = extract::run(&root) {
-                eprintln!("error: {error}");
-                std::process::exit(1);
-            }
-            return;
-        }
-        Some("find") => {
-            let query = args.get(1).map(String::as_str).unwrap_or_else(|| usage());
-            match extract::find(".", query) {
-                Ok(matches) => {
-                    println!("{} matches for '{query}':", matches.len());
-                    for symbol in matches {
-                        println!(
-                            "{}::{} [{}] (L{}–{})",
-                            symbol.path, symbol.name, symbol.kind, symbol.lines[0], symbol.lines[1]
-                        );
-                    }
-                }
-                Err(error) => {
-                    eprintln!("error: {error}");
-                    std::process::exit(1);
-                }
-            }
-            return;
-        }
-        Some("score") => score(&args[1..]),
-        Some("tree") => {
-            let target = args.get(1).map(String::as_str).unwrap_or(".");
-            if let Err(error) = tree::inspect_with_options(target, full_docstring) {
-                eprintln!("error: {error}");
-                std::process::exit(1);
-            }
-            return;
-        }
-        _ => {
-            let target = args.first().map(String::as_str).unwrap_or_else(|| usage());
-            if let Err(error) = tree::inspect_with_options(target, full_docstring) {
-                eprintln!("error: {error}");
-                std::process::exit(1);
-            }
-            return;
-        }
+    // SAFETY: restores the default action (SIG_DFL) for SIGPIPE (13) before any output,
+    // so a closed pipe such as `topo extract . | head` ends the process quietly.
+    #[cfg(unix)]
+    unsafe {
+        signal(13, 0);
     }
+    let status = match run(std::env::args_os().skip(1).collect()) {
+        Ok(found) => i32::from(!found),
+        Err(error) => {
+            eprintln!("error: {error}");
+            2
+        }
+    };
+    std::process::exit(status);
 }
 
-fn score(args: &[String]) {
-    let mut options = report::Options::default();
-    let mut files = Vec::new();
-    let mut index = 0;
-    while index < args.len() {
-        let arg = &args[index];
-        index += 1;
-        match arg.as_str() {
-            "--detail" | "--functions" => options.detail = true,
+/// Routes arguments to a command, returning false when it found nothing; an argument that
+/// is not Unicode reads as an unknown option.
+fn run(args: Vec<OsString>) -> Result<bool, String> {
+    let args: Vec<&str> = args.iter().map(|arg| arg.to_str().unwrap_or("-")).collect();
+    match args.as_slice() {
+        _ if args.contains(&"--help") || args.contains(&"-h") => println!("{USAGE}"),
+        ["--version" | "-V"] => println!("topo {}", env!("CARGO_PKG_VERSION")),
+        ["score", rest @ ..] => score(rest)?,
+        _ if args.iter().any(|arg| arg.starts_with('-')) => return Err(USAGE.to_owned()),
+        ["find", name] | ["find", name, _] => return tree::find(name, args.get(2).unwrap_or(&".")),
+        ["extract"] => extract::run(".")?,
+        ["extract", target] => extract::run(target)?,
+        [] => return tree::inspect("."),
+        [target] if *target != "find" => return tree::inspect(target),
+        _ => return Err(USAGE.to_owned()),
+    }
+    Ok(true)
+}
+
+/// Scores the given paths (the working directory by default), skipping unreadable files
+/// and, unless `--tests` is given, the tests a directory scan finds.
+fn score(args: &[&str]) -> Result<(), String> {
+    let (mut options, mut tests) = (Options::default(), false);
+    let mut paths = Vec::new();
+    for arg in args {
+        match *arg {
+            "--detail" => options.detail = true,
             "--guide" => options.guide = true,
-            "--all-metrics" => {
-                options.metrics = vec![
-                    report::Metric::Nmi,
-                    report::Metric::Loc,
-                    report::Metric::Docstring,
-                    report::Metric::Cc,
-                    report::Metric::Cognitive,
-                    report::Metric::Halstead,
-                ]
-            }
-            "--no-colour" | "--no-color" => options.colour = false,
-            "--metrics" => {
-                let value = args.get(index).cloned().unwrap_or_default();
-                index += 1;
-                options.metrics = report::parse_metrics(&value).unwrap_or_else(|e| {
-                    eprintln!("{e}");
-                    usage()
-                });
-            }
-            "--help" | "-h" => usage(),
-            value if value.starts_with('-') => {
-                eprintln!("unknown option: {value}");
-                usage();
-            }
-            path => files.push(path.to_owned()),
+            "--tests" => tests = true,
+            flag if flag.starts_with('-') => return Err(format!("unknown option: {flag}")),
+            path => paths.push(path),
         }
     }
-    if files.is_empty() {
-        usage();
+    let paths = if paths.is_empty() { vec!["."] } else { paths };
+    let analysed: Vec<_> = paths::analyse(&paths, Path::new("."), tests)?.collect();
+    if analysed.is_empty() {
+        return Err("no supported source files to score (tests need --tests)".to_owned());
     }
-    let mut input_files = Vec::new();
-    for path in files {
-        collect_paths(&path, &mut input_files);
-    }
-    let analysed: Vec<_> = input_files.iter().filter_map(|p| analyse(p)).collect();
     report::print_table(&analysed, &options);
     if options.guide {
         report::print_guide(options.colour);
     }
+    Ok(())
 }

@@ -26,8 +26,8 @@ Avoid comments that merely repeat the name or implementation:
 Prefer one short sentence or two compact clauses. The description should remain useful when rendered beside a tree entry:
 
 ```text
-src/adapters/          # Language-specific analysis implementations
-src/extract.rs         # Emits file, import, and symbol records
+src/lang.rs            # Maps extensions to languages and their syntax tables
+src/extract.rs         # Prints records for files, imports, and declarations
 ```
 
 A useful description is:
