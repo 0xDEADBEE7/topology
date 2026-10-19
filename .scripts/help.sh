@@ -4,7 +4,7 @@ set -euo pipefail
 printf "%-16s %s\n" "Target"    "Description"
 printf "%-16s %s\n" "------"    "-----------"
 printf "%-16s %s\n" "build"     "cargo build --release"
-printf "%-16s %s\n" "test"      "cargo test plus the TypeScript smoke test"
+printf "%-16s %s\n" "test"      "cargo test plus every README command"
 printf "%-16s %s\n" "lint"      "cargo fmt --check and clippy -D warnings"
 printf "%-16s %s\n" "check"     "lint + test (CI gate)"
 printf "%-16s %s\n" "extract"   "extract metadata as raw JSONL (REPO=dir)"
