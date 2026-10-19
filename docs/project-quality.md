@@ -24,8 +24,8 @@ Explicitly named directories are scanned even if their name is normally excluded
 Every language is parsed with tree-sitter. A file with syntax errors is measured
 from the recovered tree; a warning names the file and its error count, and
 extraction records it as `parse_errors`. Every command skips a file or directory
-it cannot read with a warning naming it; scoring fails only when no file could be
-analysed.
+it cannot read or decode with a warning naming it (the tree leaves it out); scoring
+fails only when no file could be analysed.
 
 Descriptions come from the doc node the parser finds. A file's is its module
 docstring or the `//!`, `/*!` and `/** */` blocks before its first code, past
@@ -73,11 +73,14 @@ band of 99%; it scores callbacks separately, ignores `||` runs and exempts JSX
 `&&`, so its numbers are lower by design.
 
 Imports are read from the syntax tree: `import`, `export … from`, `import x =
-require()`, `import()` and `require()` in TypeScript and JavaScript, Python
-`import` and `from … import` with their leading dots, and Rust `use` expanded to
-one path each. Relative imports resolve to existing files: script specifiers to
-files and directory indexes, Python modules by dot level. Package imports,
-tsconfig aliases, Rust paths and absolute Python imports remain unresolved. This is
+require()`, and `import()` or `require()` of a quoted string in TypeScript and
+JavaScript; Python `import` and `from … import` with their leading dots, one record
+per name (`imported_name`), but not `from __future__` directives; and Rust `use`
+expanded to one path each. Relative imports resolve to existing files: script
+specifiers to `.ts`, `.tsx` and JavaScript files and directory indexes (not `.d.ts`
+declarations), Python modules by dot level, a package before a same-named module.
+Package imports, tsconfig aliases, Rust paths and absolute Python imports remain
+unresolved. This is
 a structural assessment, not TypeScript type checking or React hook-rule linting.
 
 # Development checks

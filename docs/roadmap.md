@@ -76,8 +76,8 @@ Status (October 2026): M0–M6 done.
 - M5 fix review (16 of 20 findings confirmed, 12 of them regressions; all fixed in M6
   except pre-existing parenthesized Python docstrings): a method-chain callback bound by
   an object key, class field or assignment starts at its binding; a comment is not a
-  wrapper call's argument; functions in objects, call arguments, decorators, heritage
-  clauses and static blocks are not class members (16 corpus names lose a wrong
+  wrapper call's argument; functions in objects, decorators, heritage clauses and
+  static blocks are not class members (16 corpus names lose a wrong
   `App.`/`WaypointClient.` prefix); Rust impls on arrays, tuples, pointers, fn types and
   trait objects keep their type's text (`[u8; 4]::size`, not `4]::size`); equal rows go
   to the unit with fewer bytes, so `withX = (C) => function WithX() {...}` charges the
@@ -90,8 +90,9 @@ Status (October 2026): M0–M6 done.
   dependencies). Bogus import sources fell from 939/13/100/414/70/8 to 0 on all six
   repositories (the harness now accepts the valid specifiers `.` and `..`). The 31
   excalidraw wrong-file resolutions were already fixed in M1; now no import resolves to
-  its own file and no earlier resolution changed, while resolved pairs rose (excalidraw
-  2,299 → 2,862, docusaurus 852 → 1,362, requests 2 → 82 relative Python imports).
+  its own file and no earlier relative resolution changed, while resolved pairs rose
+  (excalidraw 2,299 → 2,862, docusaurus 852 → 1,362, requests 0 → 79 relative Python
+  imports; its 2 absolute `tests.testserver.server` resolutions are dropped by design).
   Outlining a 40,000-line TS file takes 0.09–0.18 s (2.4–14.5 s before, on three
   generated files). The Doc column equals extract's descriptions in every repository:
   described functions went from 541 to 643 in excalidraw (JSDoc above class fields and
@@ -100,9 +101,24 @@ Status (October 2026): M0–M6 done.
   names, lines and metrics, file descriptions and the directory tree are otherwise
   unchanged. The tree now parses every file, so it takes 0.57 s on excalidraw (was
   0.02 s) and warns about partially parsed files; extract takes 0.64 s (was 1.08 s).
-  M6 removed 363 code lines (1,845 → 1,482), within its −350 to −450 target, after
+  M6 removed 360 code lines (1,845 → 1,485), within its −350 to −450 target, after
   about 35 lines for the M5 review fixes and `export { }` clauses.
-- Size: `src` is 10 files, 1,780 physical and 1,482 code lines, all green. Budget 10
+- M6 review (30 of 31 findings confirmed; fixed here unless listed as a limit): an
+  unterminated import string no longer panics every command; extract streams again
+  (`extract | head` on excalidraw 0.54 → 0.01 s); `#[doc(alias …)]` and `include_str!`
+  are not docs; prose that mentions copyright stays a description; leading `**`, `/`
+  and `!` in doc text survive; a JSDoc block that is only tags ends the search and never
+  lends a later paragraph; decorated and line-broken class fields, pairs and assignments
+  start at their binding and keep their JSDoc and name (excalidraw: 29 parents restored,
+  47 signatures lose container or sibling text); members of one-line objects, classes
+  and impls no longer take the container's doc; `export { a }` marks only the top-level
+  `a`; a Python package wins over a same-named module. Known limits, all rare in the
+  corpus: doc search is quadratic in a run of thousands of comments above one
+  declaration; a callback bound mid-chain keeps the chain in its signature; later
+  declarators in `const a = …, b = …` take the statement's doc; Python public names under
+  a module-level `if`/`try` are not exported; `#[doc = "…"]` escapes are not decoded; a
+  comment before a test label loses the label.
+- Size: `src` is 10 files, 1,789 physical and 1,485 code lines, all green. Budget 10
   files and 1,500 code lines, the hard ceiling, so M7 must offset what it adds; yellow
   share 0‰.
 
