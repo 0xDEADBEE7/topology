@@ -22,25 +22,22 @@ pub(super) fn show_file(path: &str, full_docstring: bool) -> Result<(), String> 
     Ok(())
 }
 
-/// Displays the signature and body of a selected declaration.
+/// Displays the source of a declaration found in the named file only.
 pub(super) fn show_symbol(path: &str, name: &str) -> Result<(), String> {
-    let path = path.strip_prefix("./").unwrap_or(path);
-    let matches = crate::extract::find(".", &format!("{path}::{name}"))?;
-    let symbol = matches
-        .first()
+    let (_, symbols) = crate::extract::file_outline(path)?;
+    let symbol = symbols
+        .iter()
+        .find(|symbol| symbol.name == name)
         .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
-    println!(
-        "{}::{} (L{}–{})",
-        symbol.path, symbol.name, symbol.lines[0], symbol.lines[1]
-    );
-    println!("{}", symbol.signature);
-    let source = fs::read_to_string(&symbol.path).map_err(|e| e.to_string())?;
+    let [start, end] = symbol.lines;
+    println!("{path}::{name} (L{start}–{end})");
+    let source = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     for line in source
         .lines()
-        .skip(symbol.lines[0])
-        .take(symbol.lines[1].saturating_sub(symbol.lines[0]))
+        .skip(start.saturating_sub(1))
+        .take(end + 1 - start)
     {
-        println!("    {line}");
+        println!("{line}");
     }
     Ok(())
 }

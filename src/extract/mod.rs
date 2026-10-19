@@ -23,7 +23,6 @@ pub struct SymbolInfo {
     pub name: String,
     pub kind: String,
     pub qualified_name: String,
-    pub signature: String,
     pub lines: [usize; 2],
     pub description: Option<String>,
 }

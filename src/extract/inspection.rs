@@ -23,7 +23,7 @@ pub fn file_outline(path: &str) -> Result<(Option<String>, Vec<SymbolInfo>), Str
         .filter(|value| {
             matches!(
                 value.get("type").and_then(|v| v.as_str()),
-                Some("function") | Some("class")
+                Some("function" | "class" | "struct")
             )
         })
         .filter_map(symbol_info)

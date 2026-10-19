@@ -2,20 +2,23 @@
 
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Output},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 struct Project(PathBuf);
 
 impl Project {
     fn new() -> Self {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
         let root =
-            std::env::temp_dir().join(format!("topology-test-{}-{stamp}", std::process::id()));
+            std::env::temp_dir().join(format!("topology-test-{}-{id}-{stamp}", std::process::id()));
         fs::create_dir(&root).unwrap();
         Self(root)
     }
@@ -109,6 +112,33 @@ fn commands_skip_files_they_cannot_parse() {
         .unwrap();
     assert!(String::from_utf8_lossy(&find.stdout).contains("good.rs::works"));
     assert!(String::from_utf8_lossy(&find.stderr).contains("broken.rs"));
+}
+
+#[test]
+fn symbol_lookup_reads_only_the_named_file() {
+    let project = Project::new();
+    project.write(
+        "lib.rs",
+        "//! Library.\n/// Holds settings.\npub struct Config {\n    pub name: String,\n}\n/// Builds a config.\npub fn build() -> Config {\n    Config { name: String::new() }\n}\n",
+    );
+    project.write("broken.rs", "fn broken( {");
+    let topo = |target: &str, directory: &Path| {
+        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+            .arg(target)
+            .current_dir(directory)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success() && output.stderr.is_empty(),
+            "{target}"
+        );
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let file = project.0.join("lib.rs").display().to_string();
+    let body = "pub fn build() -> Config {\n    Config { name: String::new() }\n}";
+    assert!(topo(&format!("{file}::build"), Path::new(".")).contains(body));
+    assert!(topo("lib.rs::build", &project.0).contains(body));
+    assert!(topo(&file, &project.0).contains("Config (L3–5)"));
 }
 
 #[test]
