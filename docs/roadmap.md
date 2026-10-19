@@ -1,6 +1,9 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status: M0 and M1 in progress (October 2026).
+Status (October 2026): M0 done except moving the stash/fig scripts, which waits on
+where they should live. M1 done: no corpus repository aborts, JavaScript is
+measured, and the budget is 42 files and 2,650 lines (M1 grew `src` by 108 lines,
+above the +10 to +30 estimate; about 25 are unit tests still inside `src`).
 
 ## 1. Recommendation
 
