@@ -7,6 +7,7 @@ use preceding::preceding_docs;
 
 /// Describe a file by its leading module documentation, in any supported language.
 pub(crate) fn module_doc(source: &str) -> Option<String> {
+    let source = source.trim_start_matches('\u{feff}');
     leading_docs(&source.lines().collect::<Vec<_>>())
 }
 

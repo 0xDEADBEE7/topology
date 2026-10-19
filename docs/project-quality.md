@@ -25,8 +25,10 @@ warning names the file and its error count, and extraction records it as
 be analysed.
 
 The tree reads descriptions without parsing: the first paragraph of a leading
-`//!`, `/*!` or `/** */` comment or Python docstring, skipping license headers,
-`@` pragmas, reStructuredText titles and directives such as `'use client'`.
+`//!`, `/*!` or `/** */` comment or Python docstring, up to its first `@` tag. It
+skips plain `/* */` comments, license headers, `@` pragmas, reStructuredText
+titles and directives such as `'use client'`. TypeScript and JavaScript score the
+Docs column with the same reader.
 
 Relative imports resolve existing TypeScript and JavaScript files and directory
 indexes. Package imports and tsconfig aliases remain unresolved. This is

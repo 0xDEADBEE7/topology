@@ -34,16 +34,6 @@ pub(super) fn collect_declarations(
     }
 }
 
-/// Recognizes a leading JSDoc module description.
-pub(super) fn has_file_docstring(root: Node<'_>, source: &[u8]) -> bool {
-    root.named_child(0).is_some_and(|node| {
-        node.kind() == "comment"
-            && node
-                .utf8_text(source)
-                .is_ok_and(|text| text.trim_start().starts_with("/**"))
-    })
-}
-
 /// Recognizes JSDoc attached to the containing declaration.
 fn has_preceding_comment(node: Node<'_>, source: &[u8]) -> bool {
     node.prev_named_sibling().is_some_and(|sibling| {

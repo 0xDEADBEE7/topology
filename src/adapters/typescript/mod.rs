@@ -2,7 +2,7 @@
 
 use super::Adapter;
 use crate::metrics;
-use declarations::{collect_declarations, has_file_docstring};
+use declarations::collect_declarations;
 use tree_sitter::{Node, Parser};
 use tree_sitter_typescript::{LANGUAGE_TSX, LANGUAGE_TYPESCRIPT};
 mod counts;
@@ -46,7 +46,7 @@ impl Adapter for TypeScriptAdapter {
             &raw,
             functions,
             classes,
-            has_file_docstring(root, source.as_bytes()),
+            crate::extract::module_doc(source).is_some(),
             source.lines().count(),
         );
         file.parse_errors = syntax_errors(root);

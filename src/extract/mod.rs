@@ -8,6 +8,7 @@ mod inspection;
 mod resolution;
 mod search;
 mod symbols;
+pub(crate) use documentation::module_doc;
 pub use inspection::{file_descriptions, file_outline};
 pub use search::find;
 mod metadata;
