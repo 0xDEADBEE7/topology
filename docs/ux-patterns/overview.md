@@ -13,7 +13,7 @@ This shows directories, files, and concise file documentation.
 ## 2. Inspect a file
 
 ```bash
-topo ./src/visitor.rs
+topo ./src/walk.rs
 ```
 
 This shows the file description and its symbols with line ranges. It is an outline, not a source dump; use it to choose what deserves attention.
@@ -21,7 +21,7 @@ This shows the file description and its symbols with line ranges. It is an outli
 ## 3. Inspect an implementation
 
 ```bash
-topo ./src/visitor.rs::visit_expr_while
+topo ./src/walk.rs::increment
 ```
 
 This shows the signature and source range for one symbol.
@@ -29,7 +29,7 @@ This shows the signature and source range for one symbol.
 ## 4. Find an unknown location
 
 ```bash
-topo find visit_expr_while
+topo find increment
 ```
 
 The result lists every matching definition. Pass any result back to `topo` to inspect it.
