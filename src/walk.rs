@@ -2,7 +2,7 @@
 
 use crate::{
     lang::{Language, Spec},
-    metrics::{ClassMetrics, FileMetrics, FnMetrics, Import},
+    metrics::{FileInfo, Import, Unit},
     syntax,
 };
 use std::cmp::Reverse;
@@ -12,7 +12,7 @@ const NOTHING: &[&str] = &[];
 const BODY: &[&str] = &["body"];
 
 /// Measures one source file, warning when only part of it could be parsed.
-pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
+pub fn analyse(path: &str, source: &str) -> Result<FileInfo, String> {
     let language = Language::from_path(path).ok_or_else(|| unsupported(path))?;
     let (grammar, spec) = language.grammar();
     let mut parser = Parser::new();
@@ -29,17 +29,18 @@ pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
         fns: Vec::new(),
         classes: Vec::new(),
         imports: Vec::new(),
+        exports: syntax::export_names(tree.root_node(), source),
     };
     walker.walk(tree.root_node(), None, 0);
     let parse_errors = syntax_errors(tree.root_node());
     if parse_errors > 0 {
         eprintln!("warning: {path}: syntax errors: {parse_errors}; measured the recoverable code");
     }
-    Ok(FileMetrics {
+    Ok(FileInfo {
         language: language.name(),
         path: path.to_owned(),
         loc: walker.code.iter().filter(|code| **code).count(),
-        has_docstring: syntax::module_doc(source).is_some(),
+        doc: syntax::module_doc(spec, source, tree.root_node()),
         parse_errors,
         fns: walker.units(),
         classes: walker.classes,
@@ -70,15 +71,18 @@ fn syntax_errors(node: Node<'_>) -> usize {
         .sum()
 }
 
-/// Walks one syntax tree using its language's table, collecting units, classes and code.
+/// Walks one syntax tree using its language's table, collecting units, classes, imports
+/// and code.
 struct Walker<'a> {
     spec: &'static Spec,
     source: &'a str,
     /// Whether each row holds code: text that is neither a comment nor a string statement.
     code: Vec<bool>,
-    fns: Vec<FnMetrics>,
-    classes: Vec<ClassMetrics>,
+    fns: Vec<Unit>,
+    classes: Vec<Unit>,
     imports: Vec<Import>,
+    /// Names that `export { a }` or `export default a` expose.
+    exports: Vec<String>,
 }
 
 impl Walker<'_> {
@@ -94,11 +98,7 @@ impl Walker<'_> {
             return self.mark_code(start, node.end_byte());
         }
         if self.spec.classes.contains(&kind) {
-            self.classes.push(ClassMetrics {
-                name: self.class_name(node),
-                line_start: node.start_position().row + 1,
-                line_end: node.end_position().row + 1,
-            });
+            self.classes.push(self.unit(node, self.class_name(node)));
         }
         syntax::imports(node, self.source, &mut self.imports);
         let function = self.spec.functions.contains(&kind);
@@ -127,20 +127,30 @@ impl Walker<'_> {
 
     /// Starts a named unit at its declaration.
     fn open(&mut self, node: Node<'_>, name: String) -> usize {
+        self.fns.push(self.unit(node, name));
+        self.fns.len() - 1
+    }
+
+    /// Describes a function or class from its declaration: where it starts, its doc, its
+    /// header up to the body, whether it is exported, and its container.
+    fn unit(&self, node: Node<'_>, name: String) -> Unit {
         let declaration = self.declaration(node);
-        self.fns.push(FnMetrics {
-            name,
+        let anchor = syntax::anchor(declaration);
+        Unit {
             line_start: declaration.start_position().row + 1,
             line_end: node.end_position().row + 1,
             loc: 0,
             cognitive: 0,
-            has_docstring: syntax::documented(self.spec, self.source.as_bytes(), node, declaration),
-        });
-        self.fns.len() - 1
+            doc: syntax::doc(self.spec, self.source, node, anchor),
+            signature: syntax::signature(self.source, node, anchor),
+            exported: syntax::exported(declaration, &name, &self.exports),
+            parent: self.scope(node),
+            name,
+        }
     }
 
     /// Gives each code row to the smallest unit holding it, the earlier one on equal ranges.
-    fn units(&mut self) -> Vec<FnMetrics> {
+    fn units(&mut self) -> Vec<Unit> {
         let mut owners = vec![None; self.code.len()];
         let mut order: Vec<_> = (0..self.fns.len()).collect();
         order.sort_by_key(|&i| Reverse((self.fns[i].line_end - self.fns[i].line_start, i)));
@@ -266,14 +276,22 @@ impl Walker<'_> {
     /// Prefixes a member with its containers up to the nearest function, as in `View.render`,
     /// `Type::method` or `Outer.Inner.method`.
     fn qualify(&self, member: Node<'_>, name: String) -> String {
+        match self.scope(member) {
+            Some(scope) => format!("{scope}{}{name}", self.spec.separator),
+            None => name,
+        }
+    }
+
+    /// Names the class, impl or trait holding a member, unless a function holds it first.
+    fn scope(&self, member: Node<'_>) -> Option<String> {
         let spec = self.spec;
         let stops = [spec.functions, spec.closures, spec.scopes];
         let mut ancestors = std::iter::successors(member.parent(), |node| node.parent());
-        let scope = ancestors.find(|node| stops.iter().any(|kinds| kinds.contains(&node.kind())));
-        match scope.filter(|scope| spec.scopes.contains(&scope.kind())) {
-            Some(scope) => format!("{}{}{name}", self.class_name(scope), spec.separator),
-            None => name,
-        }
+        let scope =
+            ancestors.find(|node| stops.iter().any(|kinds| kinds.contains(&node.kind())))?;
+        spec.scopes
+            .contains(&scope.kind())
+            .then(|| self.class_name(scope))
     }
 
     /// Names a class or container by itself (qualified), its implemented type's own name, or

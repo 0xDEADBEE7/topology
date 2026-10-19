@@ -1,7 +1,7 @@
 //! Rates functions against the metric bands and prints score tables and the guide.
 
 use crate::{
-    metrics::{FileMetrics, FnMetrics},
+    metrics::{FileInfo, Unit},
     table::{self, GREEN, RED, YELLOW},
 };
 use std::io::IsTerminal;
@@ -40,7 +40,7 @@ impl Band {
 }
 
 /// Rates a function by the worse of its lines and cognitive complexity bands.
-pub fn function_band(f: &FnMetrics) -> Band {
+pub fn function_band(f: &Unit) -> Band {
     Band::of(f.loc, BANDS[0]).max(Band::of(f.cognitive as usize, BANDS[1]))
 }
 
@@ -64,12 +64,12 @@ impl Default for Options {
 
 /// Prints each file with its yellow and red functions (all functions with `detail`),
 /// then the share of function lines in each band.
-pub fn print_table(files: &[FileMetrics], options: &Options) {
+pub fn print_table(files: &[FileInfo], options: &Options) {
     let headers = ["File", "Lines", "Cog", "Doc"].map(str::to_owned);
     let mut rows = Vec::new();
     for file in files {
         let partial = if file.parse_errors > 0 { " ~" } else { "" };
-        let cells = vec![plain(file.loc), plain(""), doc(file.has_docstring)];
+        let cells = vec![plain(file.loc), plain(""), doc(file.doc.is_some())];
         rows.push((format!("{}{partial}", file.path), cells, true));
         for f in &file.fns {
             if options.detail || function_band(f) != Band::Green {
@@ -85,12 +85,12 @@ pub fn print_table(files: &[FileMetrics], options: &Options) {
     println!("{}", summary(files));
 }
 
-fn function_cells(f: &FnMetrics) -> Vec<(String, &'static str)> {
+fn function_cells(f: &Unit) -> Vec<(String, &'static str)> {
     let (loc, cog) = (f.loc, f.cognitive as usize);
     vec![
         (loc.to_string(), Band::of(loc, BANDS[0]).colour()),
         (cog.to_string(), Band::of(cog, BANDS[1]).colour()),
-        doc(f.has_docstring),
+        doc(f.doc.is_some()),
     ]
 }
 
@@ -103,8 +103,8 @@ fn doc(present: bool) -> (String, &'static str) {
 }
 
 /// Summarizes the risk profile, documentation coverage, and partially parsed files.
-fn summary(files: &[FileMetrics]) -> String {
-    let fns: Vec<&FnMetrics> = files.iter().flat_map(|file| &file.fns).collect();
+fn summary(files: &[FileInfo]) -> String {
+    let fns: Vec<&Unit> = files.iter().flat_map(|file| &file.fns).collect();
     let lines = fns.iter().map(|f| f.loc).sum::<usize>().max(1) as f64;
     let count_and_share = |band| {
         let banded: Vec<_> = fns.iter().filter(|f| function_band(f) == band).collect();
@@ -113,8 +113,8 @@ fn summary(files: &[FileMetrics]) -> String {
     };
     let (yellow, yellow_share) = count_and_share(Band::Yellow);
     let (red, red_share) = count_and_share(Band::Red);
-    let documented = fns.iter().filter(|f| f.has_docstring).count();
-    let modules = files.iter().filter(|file| file.has_docstring).count();
+    let documented = fns.iter().filter(|f| f.doc.is_some()).count();
+    let modules = files.iter().filter(|file| file.doc.is_some()).count();
     let partial = match files.iter().filter(|file| file.parse_errors > 0).count() {
         0 => String::new(),
         n => format!("; ~ marks {n} partially parsed"),

@@ -1,7 +1,7 @@
-//! Renders repository, file, and symbol topology.
+//! Renders repository, file, and symbol topology, and finds declarations by name.
 
-use crate::extract::{is_named, SymbolInfo};
-use std::{collections::BTreeMap, fs, path::Path};
+use crate::metrics::{FileInfo, Unit};
+use std::{cmp::Reverse, collections::BTreeMap, fs, path::Path};
 
 /// Displays repository, file, or symbol detail according to the target path.
 pub fn inspect_with_options(target: &str, full_docstring: bool) -> Result<(), String> {
@@ -16,7 +16,12 @@ pub fn inspect_with_options(target: &str, full_docstring: bool) -> Result<(), St
 
 /// Displays a repository tree with available descriptions.
 fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
-    let files = crate::extract::file_descriptions(root)?;
+    let canonical = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
+    let files = crate::paths::analyse(&[&canonical], &canonical)?;
+    let files = files
+        .into_iter()
+        .map(|file| (file.path, file.doc))
+        .collect();
     let root_name = Path::new(root)
         .file_name()
         .and_then(|n| n.to_str())
@@ -55,20 +60,23 @@ fn read_docstring(directory: &Path) -> Option<String> {
 
 /// Displays a file description and its declaration outline.
 fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
-    let (description, mut symbols) = crate::extract::file_outline(path)?;
-    symbols.sort_by_key(|s| (s.lines[0], std::cmp::Reverse(s.lines[1]), s.kind != "class"));
-    let rows: Vec<_> = (symbols.iter())
-        .map(|s| {
-            let contains = |o: &&SymbolInfo| o.lines[0] <= s.lines[0] && s.lines[1] <= o.lines[1];
-            let containers = symbols.iter().filter(contains);
-            let depth = 1 + containers.filter(|o| o.lines != s.lines).count();
+    let (_, file) = read(path)?;
+    let mut units: Vec<_> = file.units().collect();
+    units.sort_by_key(|(u, kind)| (u.line_start, Reverse(u.line_end), *kind == "function"));
+    let lines = |u: &Unit| (u.line_start, u.line_end);
+    let rows: Vec<_> = (units.iter())
+        .map(|(s, _)| {
+            let contains =
+                |(o, _): &&(&Unit, _)| o.line_start <= s.line_start && s.line_end <= o.line_end;
+            let containers = units.iter().filter(contains);
+            let depth = 1 + containers.filter(|(o, _)| lines(o) != lines(s)).count();
             let indent = "  ".repeat(depth);
-            let row = format!("{indent}{} (L{}–{})", s.name, s.lines[0], s.lines[1]);
-            (row, s.description.clone())
+            let row = format!("{indent}{} (L{}–{})", s.name, s.line_start, s.line_end);
+            (row, s.doc.clone())
         })
         .collect();
     let width = align_width(rows.iter().map(|(prefix, _)| prefix.chars().count()));
-    print_entry(path, description, width, full_docstring);
+    print_entry(path, file.doc, width, full_docstring);
     for (prefix, description) in rows {
         print_entry(&prefix, description, width, full_docstring);
     }
@@ -82,17 +90,11 @@ fn align_width(widths: impl Iterator<Item = usize>) -> usize {
 
 /// Displays the source of a declaration found in the named file only.
 fn show_symbol(path: &str, name: &str) -> Result<(), String> {
-    let source = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    let file = crate::walk::analyse(path, &source).map_err(|e| format!("{path}: {e}"))?;
-    let (start, end) = (file.fns.iter().map(|f| (&f.name, f.line_start, f.line_end)))
-        .chain(
-            file.classes
-                .iter()
-                .map(|c| (&c.name, c.line_start, c.line_end)),
-        )
-        .filter(|(symbol, ..)| is_named(symbol, name))
-        .min_by_key(|(symbol, ..)| *symbol != name)
-        .map(|(_, start, end)| (start, end))
+    let (source, file) = read(path)?;
+    let (start, end) = (file.units().map(|(unit, _)| unit))
+        .filter(|unit| is_named(&unit.name, name))
+        .min_by_key(|unit| unit.name != name)
+        .map(|unit| (unit.line_start, unit.line_end))
         .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
     println!("{path}::{name} (L{start}–{end})");
     for line in source
@@ -103,6 +105,46 @@ fn show_symbol(path: &str, name: &str) -> Result<(), String> {
         println!("{line}");
     }
     Ok(())
+}
+
+/// Reads and analyses one named file.
+fn read(path: &str) -> Result<(String, FileInfo), String> {
+    let source = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let file = crate::walk::analyse(path, &source).map_err(|e| format!("{path}: {e}"))?;
+    Ok((source, file))
+}
+
+/// Prints the declarations under the working directory that `query` names.
+pub fn find(query: &str) -> Result<(), String> {
+    let mut found = Vec::new();
+    for file in crate::paths::analyse(&["."], Path::new("."))? {
+        let named = |(unit, _): &(&Unit, _)| matches(&file.path, &unit.name, query);
+        let mut units: Vec<_> = file.units().filter(named).collect();
+        units.sort_by_key(|(unit, _)| unit.line_start);
+        found.extend(units.iter().map(|(unit, kind)| {
+            let (start, end) = (unit.line_start, unit.line_end);
+            format!("{}::{} [{kind}] (L{start}–{end})", file.path, unit.name)
+        }));
+    }
+    println!("{} matches for '{query}':", found.len());
+    for row in found {
+        println!("{row}");
+    }
+    Ok(())
+}
+
+/// Matches a declaration by name, or by `path::name` with or without the extension.
+fn matches(path: &str, name: &str, query: &str) -> bool {
+    let stem = path.rsplit_once('.').map_or(path, |(stem, _)| stem);
+    is_named(name, query)
+        || [path, stem]
+            .iter()
+            .any(|path| query == format!("{path}::{name}"))
+}
+
+/// Matches a symbol by its full name or by the last segment of `View.render` or `Type::method`.
+fn is_named(symbol: &str, query: &str) -> bool {
+    symbol == query || symbol.rsplit(['.', ':']).next() == Some(query)
 }
 
 /// Fits a description beside a tree entry unless full text is requested.

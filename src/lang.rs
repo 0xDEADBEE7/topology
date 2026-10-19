@@ -130,7 +130,7 @@ const ECMA: Spec = Spec {
     logical: &["&&", "||"],
     comments: &["comment"],
     docs: &["/**"],
-    attributes: &[],
+    attributes: &["comment", "decorator"],
     wrappers: &[
         "parenthesized_expression",
         "as_expression",

@@ -167,6 +167,86 @@ fn rust_and_python_semantics_name_and_rate_functions() {
     assert!(topo(&[&format!("{path}::Popen.Inner.deep")]).contains("def deep(self):"));
 }
 
+/// Lists each declaration as `name exported parent [signature] description`.
+fn declarations(path: &str) -> Vec<String> {
+    let records = records(path);
+    let text = |value: &serde_json::Value| value.as_str().unwrap_or("-").to_owned();
+    let units = records.iter().filter(|r| r["type"] != "import");
+    let rows = units.map(|r| {
+        let (name, parent, signature) =
+            (text(&r["name"]), text(&r["parent"]), text(&r["signature"]));
+        format!(
+            "{name} {} {parent} [{signature}] {}",
+            r["exported"],
+            text(&r["description"])
+        )
+    });
+    rows.collect()
+}
+
+/// Docs come from the doc node the walker finds, headers stop at the body, and exports
+/// follow each language's interface rules.
+#[test]
+fn declarations_carry_docs_signatures_exports_and_parents() {
+    assert_eq!(
+        declarations("tests/fixtures/typescript/declarations.ts"),
+        [
+            "- null - [-] Declares functions with docs, headers and exports.",
+            "add true - [export function add(a: number, b: number): number] Adds two numbers.",
+            "tagged true - [function tagged(value: number)] -",
+            "local true - [const local = () =>] -",
+            "Counter.increment false Counter [increment = () =>] Increments the count.",
+            "Counter.reset false Counter [reset()] Resets the count.",
+            "click false - [click: () =>] Handles a click.",
+            "other false - [function other()] -",
+            "Counter true - [export class Counter] -",
+        ]
+    );
+    assert_eq!(
+        declarations("tests/fixtures/rust/declarations.rs"),
+        [
+            "- null - [-] Declares items with docs, headers and exports.",
+            "build true - [pub fn build() -> u32] Builds a value across two lines.",
+            "shared true - [pub(crate) fn shared()] -",
+            "private false - [fn private()] -",
+            "Holder::get true Holder [pub fn get(&self) -> u32] Reads the value.",
+            "Holder true - [pub struct Holder] Holds a value.",
+        ]
+    );
+    assert_eq!(
+        declarations("tests/fixtures/python/declarations.py"),
+        [
+            "- null - [-] Declares functions with docs, headers and exports.",
+            "fetch true - [def fetch(url):] Fetches a page.",
+            "_private false - [def _private():] Single-quoted and joined.",
+            "Shape.area false Shape [def area(self):] Measures it.",
+            "Shape true - [class Shape:] -",
+        ]
+    );
+}
+
+/// The score's Doc column and extract's descriptions read the same doc node.
+#[test]
+fn doc_column_matches_extracted_descriptions() {
+    for language in ["typescript", "rust", "python"] {
+        for entry in std::fs::read_dir(format!("tests/fixtures/{language}")).unwrap() {
+            let path = entry.unwrap().path();
+            let path = path.to_str().unwrap();
+            if path.ends_with(".jsonl") {
+                continue;
+            }
+            let functions = records(path)
+                .into_iter()
+                .filter(|r| r["type"] == "function");
+            let described = functions.filter(|r| r["description"].is_string());
+            let described: Vec<_> = described
+                .map(|r| r["name"].as_str().unwrap().to_owned())
+                .collect();
+            assert_eq!(documented(path), described, "{path}");
+        }
+    }
+}
+
 /// Pins the extract record shapes; regenerate basic.jsonl only for a deliberate change.
 #[test]
 fn extract_output_matches_its_contract() {
@@ -178,8 +258,8 @@ fn extract_output_matches_its_contract() {
 }
 
 /// Size budget for `src` in files and code lines: lower it as the code shrinks, never raise it.
-const MAX_FILES: usize = 18;
-const MAX_LINES: u64 = 1_857;
+const MAX_FILES: usize = 10;
+const MAX_LINES: u64 = 1_500;
 const MAX_DEPENDENCIES: usize = 5;
 /// Largest share of function lines in yellow functions, per mille; ratchets down.
 const MAX_YELLOW_PER_MILLE: u64 = 0;

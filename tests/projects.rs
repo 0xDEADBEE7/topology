@@ -125,14 +125,14 @@ fn extract_records_signatures_grouped_imports_and_module_paths() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     let named = |name: &str| records.iter().find(|r| r["name"] == name).expect(name);
-    let signature = "pub fn build( input: &str, ) -> Result<(), Error> {";
+    let signature = "pub fn build( input: &str, ) -> Result<(), Error>";
     assert_eq!(named("build")["signature"], signature);
-    assert_eq!(named("build")["qualified_name"], "src/build::build");
-    assert_eq!(named("widget")["qualified_name"], "src/widget::widget");
-    let imported = |local: &str| {
+    assert_eq!(named("build")["exported"], true);
+    assert_eq!(named("widget")["exported"], true);
+    let imported = |source: &str| {
         records
             .iter()
-            .any(|r| r["type"] == "import" && r["source"] == local)
+            .any(|r| r["type"] == "import" && r["source"] == source)
     };
     assert!(imported("crate::metrics") && imported("crate::visit::collect"));
 }
@@ -404,4 +404,36 @@ fn symbol_descriptions_include_preceding_rust_and_jsdoc_comments() {
     assert!(records.iter().any(|record| record["description"]
         .as_str()
         .is_some_and(|doc| doc.contains("Explains the component."))));
+}
+
+#[test]
+fn find_matches_qualified_names_and_the_tree_reads_a_linked_root() {
+    let project = Project::new();
+    project.write(
+        "src/metrics.rs",
+        "pub struct FileInfo {}\nimpl FileInfo {\n    pub fn units(&self) {}\n}\n",
+    );
+    let topo = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+            .args(args)
+            .current_dir(&project.0)
+            .output()
+            .unwrap();
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let found = "1 matches for '{query}':\nsrc/metrics.rs::FileInfo [struct] (L1–1)\n";
+    for query in [
+        "FileInfo",
+        "src/metrics::FileInfo",
+        "src/metrics.rs::FileInfo",
+    ] {
+        assert_eq!(topo(&["find", query]), found.replace("{query}", query));
+    }
+    let method = "src/metrics.rs::FileInfo::units [function] (L3–3)";
+    assert!(topo(&["find", "units"]).contains(method));
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(project.0.join("src"), project.0.join("linked")).unwrap();
+        assert!(topo(&["linked"]).contains("metrics.rs"));
+    }
 }

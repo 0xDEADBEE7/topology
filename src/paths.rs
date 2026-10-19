@@ -1,12 +1,33 @@
-//! Discovers supported source files while excluding dependencies and build output.
+//! Discovers and analyses supported source files, excluding dependencies and build output.
 
+use crate::metrics::FileInfo;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
+/// Analyses every supported file under `targets`, naming each relative to `root` and
+/// skipping, with a warning, any that cannot be read.
+pub fn analyse(targets: &[impl AsRef<Path>], root: &Path) -> Result<Vec<FileInfo>, String> {
+    let mut paths = Vec::new();
+    for target in targets {
+        collect(target.as_ref(), &mut paths)?;
+    }
+    paths.sort();
+    paths.dedup();
+    let files = paths.iter().filter_map(|path| {
+        let name = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
+        fs::read_to_string(path)
+            .map_err(|e| e.to_string())
+            .and_then(|source| crate::walk::analyse(&name, &source))
+            .map_err(|e| eprintln!("warning: {name}: skipped: {e}"))
+            .ok()
+    });
+    Ok(files.collect())
+}
+
 /// Collects source files deterministically without following symbolic links.
-pub fn collect(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
+fn collect(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     let metadata = fs::symlink_metadata(root).map_err(|e| format!("{}: {e}", root.display()))?;
     if metadata.file_type().is_symlink() {
         return Ok(());

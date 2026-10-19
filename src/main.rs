@@ -11,7 +11,7 @@ mod tree;
 mod walk;
 
 use report::Options;
-use std::{fs, path::Path};
+use std::path::Path;
 
 #[cfg(unix)]
 extern "C" {
@@ -42,25 +42,12 @@ fn run(args: Vec<String>) -> Result<(), String> {
     let target = args.get(1).map(String::as_str).unwrap_or(".");
     match args.first().map(String::as_str) {
         Some("extract") => extract::run(target),
-        Some("find") => find(args.get(1).ok_or_else(usage)?),
+        Some("find") => tree::find(args.get(1).ok_or_else(usage)?),
         Some("score") => score(&args[1..]),
         Some("tree") => tree::inspect_with_options(target, full_docstring),
         Some(target) => tree::inspect_with_options(target, full_docstring),
         None => Err(usage()),
     }
-}
-
-/// Prints matching declarations with their source locations.
-fn find(query: &str) -> Result<(), String> {
-    let symbols = extract::find(".", query)?;
-    println!("{} matches for '{query}':", symbols.len());
-    for symbol in symbols {
-        println!(
-            "{}::{} [{}] (L{}–{})",
-            symbol.path, symbol.name, symbol.kind, symbol.lines[0], symbol.lines[1]
-        );
-    }
-    Ok(())
 }
 
 /// Describes the available command forms.
@@ -71,23 +58,7 @@ fn usage() -> String {
 /// Scores supported project sources, skipping files that cannot be read.
 fn score(args: &[String]) -> Result<(), String> {
     let (options, inputs) = parse_score_args(args)?;
-    let mut files = Vec::new();
-    for input in inputs {
-        paths::collect(Path::new(&input), &mut files)?;
-    }
-    files.sort();
-    files.dedup();
-    let analysed: Vec<_> = files
-        .iter()
-        .filter_map(|path| {
-            let path = path.to_string_lossy();
-            fs::read_to_string(path.as_ref())
-                .map_err(|e| e.to_string())
-                .and_then(|source| walk::analyse(&path, &source))
-                .map_err(|e| eprintln!("warning: {path}: skipped: {e}"))
-                .ok()
-        })
-        .collect();
+    let analysed = paths::analyse(&inputs, Path::new(""))?;
     if analysed.is_empty() {
         return Err("no supported source files could be analysed".to_owned());
     }

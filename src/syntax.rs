@@ -1,5 +1,5 @@
-//! Reads documentation and imports: doc nodes and import statements for the walker, and
-//! leading comments and docstrings by line.
+//! Reads what the syntax tree says about declarations and files: docs, headers, exports
+//! and imports.
 
 use crate::{lang::Spec, metrics::Import};
 use tree_sitter::Node;
@@ -14,197 +14,167 @@ pub fn is_docstring(spec: &Spec, node: Node<'_>) -> bool {
             .is_some_and(|child| matches!(child.kind(), "string" | "concatenated_string"))
 }
 
-/// Finds a doc comment or attribute above the declaration, or a docstring opening the body.
-pub fn documented(spec: &Spec, source: &[u8], node: Node<'_>, declaration: Node<'_>) -> bool {
+/// The outermost node starting on the declaration's row, which a doc comment sits above:
+/// a class field, an object pair or an assignment statement.
+pub fn anchor(declaration: Node<'_>) -> Node<'_> {
+    let row = declaration.start_position().row;
+    let same_row = |node: &Node<'_>| node.start_position().row == row && node.parent().is_some();
+    let outer = std::iter::successors(Some(declaration), |node| node.parent().filter(same_row));
+    outer.last().unwrap_or(declaration)
+}
+
+/// The declaration from its anchor up to its body or first comment, on one line.
+pub fn signature(source: &str, node: Node<'_>, anchor: Node<'_>) -> String {
+    let body = node.child_by_field_name("body");
+    let mut cursor = node.walk();
+    let mut children = node.children(&mut cursor);
+    let end = children.find(|child| child.is_extra() || Some(*child) == body);
+    let header = &source[anchor.start_byte()..end.map_or(node.end_byte(), |e| e.start_byte())];
+    header.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whether a declaration belongs to its module's interface: `export`, `pub`, or a public
+/// top-level Python name.
+pub fn exported(declaration: Node<'_>, name: &str, exports: &[String]) -> bool {
+    let mut parent = declaration.parent();
+    if parent.is_some_and(|p| p.kind() == "decorated_definition") {
+        parent = parent.and_then(|p| p.parent());
+    }
+    declaration.kind() == "export_statement"
+        || declaration
+            .child(0)
+            .is_some_and(|c| c.kind() == "visibility_modifier")
+        || parent.is_some_and(|p| p.kind() == "module") && !name.starts_with('_')
+        || exports.iter().any(|export| export == name)
+}
+
+/// Names that local `export { a, b as c }` and `export default a` statements expose.
+pub fn export_names(root: Node<'_>, source: &str) -> Vec<String> {
+    let mut cursor = root.walk();
+    let local = (root.named_children(&mut cursor))
+        .filter(|s| s.kind() == "export_statement" && s.child_by_field_name("source").is_none());
+    let names = local.flat_map(|statement| {
+        let clause = statement
+            .named_child(0)
+            .filter(|c| c.kind() == "export_clause");
+        let count = clause.map_or(0, |clause| clause.named_child_count());
+        let specifiers =
+            (0..count).filter_map(move |i| clause?.named_child(i)?.child_by_field_name("name"));
+        let default = statement.child_by_field_name("value");
+        specifiers.chain(default.filter(|value| value.kind() == "identifier"))
+    });
+    names
+        .map(|name| source[name.byte_range()].to_owned())
+        .collect()
+}
+
+/// Summarizes the doc comments above a declaration's anchor (past attributes and plain
+/// comments; a JSDoc block ends the search), or the docstring opening its body.
+pub fn doc(spec: &Spec, source: &str, node: Node<'_>, anchor: Node<'_>) -> Option<String> {
     if spec.docs.is_empty() {
-        let mut cursor = node.walk();
-        let body = node.child_by_field_name("body");
-        let first = body.and_then(|body| body.named_children(&mut cursor).find(|s| !s.is_extra()));
-        return first.is_some_and(|statement| is_docstring(spec, statement));
+        return docstring(spec, source, node.child_by_field_name("body")?);
     }
-    let mut sibling = declaration.prev_named_sibling();
+    let mut text = String::new();
+    let mut sibling = anchor.prev_named_sibling();
     while let Some(node) = sibling {
-        let text = node.utf8_text(source).unwrap_or_default();
-        let doc = |prefix: &&str| {
-            let rest = text.strip_prefix(*prefix);
-            rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
-        };
-        if spec.docs.iter().any(doc) && !text.starts_with("#[doc(hidden") {
-            return true;
+        if is_doc(spec, &source[node.byte_range()]) {
+            text.insert_str(0, &doc_text(source, node));
+        } else if !text.is_empty() || !spec.attributes.contains(&node.kind()) {
+            break;
         }
-        if !spec.attributes.contains(&node.kind()) {
-            return false;
-        }
-        sibling = node.prev_named_sibling();
+        let block = node.kind() == "comment" && !text.is_empty();
+        sibling = node.prev_named_sibling().filter(|_| !block);
     }
-    false
+    summary(&text)
 }
 
-/// Describe a file by its leading module documentation, in any supported language.
-pub fn module_doc(source: &str) -> Option<String> {
-    let source = source.trim_start_matches('\u{feff}');
-    leading_docs(&source.lines().collect::<Vec<_>>())
+/// Recognizes a doc comment or attribute (`///` but not `////`, or `#[doc` but not hidden).
+fn is_doc(spec: &Spec, text: &str) -> bool {
+    let doc = |prefix: &&str| {
+        let rest = text.strip_prefix(*prefix);
+        rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
+    };
+    spec.docs.iter().any(doc) && !text.starts_with("#[doc(hidden")
 }
 
-/// Extract documentation for the declaration that starts on `line`.
-pub fn docstring(language: &str, source: &str, line: usize) -> Option<String> {
-    let lines: Vec<&str> = source.lines().collect();
-    if language == "python" {
-        return python_docstring(&lines, line);
+/// Summarizes the docstring that opens a Python body or module.
+fn docstring(spec: &Spec, source: &str, body: Node<'_>) -> Option<String> {
+    let mut cursor = body.walk();
+    let first = body.named_children(&mut cursor).find(|s| !s.is_extra())?;
+    is_docstring(spec, first).then(|| summary(&doc_text(source, first)))?
+}
+
+/// Describes a file by its module docstring, or by the doc comments before its first
+/// code, skipping licenses, shebangs, directives and inner attributes.
+pub fn module_doc(spec: &Spec, source: &str, root: Node<'_>) -> Option<String> {
+    if spec.docs.is_empty() {
+        return docstring(spec, source, root);
     }
-    preceding_docs(&lines, line, language)
-}
-
-/// Reads the docstring that opens the body of the `def` or `class` starting on `line`.
-fn python_docstring(lines: &[&str], line: usize) -> Option<String> {
-    let mut depth = 0;
-    let end = (line.saturating_sub(1)..lines.len()).find(|&index| {
-        depth += lines[index].matches(['(', '[']).count() as i64;
-        depth -= lines[index].matches([')', ']']).count() as i64;
-        depth <= 0
-    })?;
-    let header = lines[end].split(" #").next().unwrap_or_default().trim_end();
-    let body = end
-        + 1
-        + lines[end + 1..]
+    let mut cursor = root.walk();
+    let mut text = String::new();
+    for child in root.named_children(&mut cursor) {
+        let code = &source[child.byte_range()];
+        if ["//!", "/*!", "/**"]
             .iter()
-            .position(|text| !text.trim().is_empty())?;
-    (header.ends_with(':') && opens_block(lines[body])).then(|| leading_docs(&lines[body..]))?
-}
-
-/// Collects the comment block immediately above a declaration.
-fn preceding_docs(lines: &[&str], end: usize, language: &str) -> Option<String> {
-    let mut docs = Vec::new();
-    let mut block = false;
-    for line in lines[..end.saturating_sub(1).min(lines.len())].iter().rev() {
-        let line = line.trim();
-        if line == "*/" {
-            block = true;
-            continue;
-        }
-        let text = if language == "rust" {
-            line.strip_prefix("///")
-        } else if block {
-            line.strip_prefix("/**")
-                .or_else(|| line.strip_prefix('*'))
-                .map(str::trim)
-        } else {
-            line.strip_prefix("/**").or_else(|| line.strip_prefix("//"))
-        };
-        let Some(text) = text else {
-            break;
-        };
-        docs.push(text.trim().trim_end_matches("*/").trim().to_owned());
-        if line.starts_with("/**") {
+            .any(|doc| code.starts_with(doc))
+        {
+            text += &doc_text(source, child);
+        } else if !child.is_extra() && !preamble(child) {
             break;
         }
     }
-    (!docs.is_empty()).then(|| {
-        docs.reverse();
-        docs.join(" ")
-    })
+    summary(&text)
 }
 
-/// Block comments and docstrings: opener, terminator, and whether the block documents code.
-const BLOCKS: [(&str, &str, bool); 7] = [
-    ("/*!", "*/", true),
-    ("/**", "*/", true),
-    ("\"\"\"", "\"\"\"", true),
-    ("'''", "'''", true),
-    ("r\"\"\"", "\"\"\"", true),
-    ("r'''", "'''", true),
-    ("/*", "*/", false),
-];
-
-/// Recognizes the start of a documentation block comment or docstring.
-fn opens_block(line: &str) -> bool {
-    BLOCKS
-        .iter()
-        .any(|(open, _, documents)| *documents && line.trim().starts_with(open))
-}
-
-/// Summarizes the first leading documentation block, skipping license headers and pragmas.
-fn leading_docs(lines: &[&str]) -> Option<String> {
-    let mut index = 0;
-    while let Some(line) = lines.get(index).map(|line| line.trim()) {
-        index += 1;
-        if is_preamble(line) && !line.starts_with("//!") {
-            continue;
-        }
-        if let Some(summary) = summary(&next_block(lines, &mut index, line)?) {
-            return Some(summary);
+/// The text of a doc node: a Rust doc comment's `doc` part and string contents, one
+/// line each, or a whole JSDoc block as its own paragraph.
+fn doc_text(source: &str, node: Node<'_>) -> String {
+    let text = source[node.byte_range()].trim_end();
+    match node.kind() {
+        "comment" if summary(text).is_none() => String::new(),
+        "comment" => format!("{text}\n\n"),
+        "doc_comment" | "string_content" => format!("{text}\n"),
+        _ => {
+            let mut cursor = node.walk();
+            let parts = node.named_children(&mut cursor);
+            parts.map(|part| doc_text(source, part)).collect()
         }
     }
-    None
 }
 
-/// Reads the comment block or docstring starting on `line`; None when the line is code.
-fn next_block<'a>(lines: &[&'a str], index: &mut usize, line: &'a str) -> Option<Vec<&'a str>> {
-    if let Some(first) = line.strip_prefix("//!") {
-        return Some(line_docs(lines, index, first));
-    }
-    let (open, close, documents) = BLOCKS.iter().find(|(open, ..)| line.starts_with(open))?;
-    let text = block_docs(lines, index, &line[open.len()..], close);
-    Some(text.filter(|_| *documents).unwrap_or_default())
+/// Recognizes what may precede a module doc: shebangs, inner attributes and directives
+/// such as `'use client'`.
+fn preamble(node: Node<'_>) -> bool {
+    let first = node.named_child(0).map(|child| child.kind());
+    matches!(
+        node.kind(),
+        "hash_bang_line" | "shebang" | "inner_attribute_item"
+    ) || node.kind() == "expression_statement" && first == Some("string")
 }
 
-/// Recognizes lines that may precede module documentation: blanks, comments,
-/// shebangs, attributes and directives such as `'use client'`.
-fn is_preamble(line: &str) -> bool {
-    line.is_empty()
-        || line.starts_with("//")
-        || line.starts_with('#')
-        || line.starts_with("'use ")
-        || line.starts_with("\"use ")
-        || line.starts_with("/**/")
-}
-
-/// Collects a run of `//!` lines that starts with `first`.
-fn line_docs<'a>(lines: &[&'a str], index: &mut usize, first: &'a str) -> Vec<&'a str> {
-    let mut text = vec![first];
-    while let Some(next) = lines.get(*index).and_then(|l| l.trim().strip_prefix("//!")) {
-        text.push(next);
-        *index += 1;
-    }
-    text
-}
-
-/// Collects a block comment or docstring body up to its terminator, if it has one.
-fn block_docs<'a>(
-    lines: &[&'a str],
-    index: &mut usize,
-    first: &'a str,
-    close: &str,
-) -> Option<Vec<&'a str>> {
-    let mut text = Vec::new();
-    let mut rest = first;
-    while !rest.contains(close) {
-        text.push(rest);
-        rest = lines.get(*index)?.trim();
-        *index += 1;
-    }
-    text.push(rest.split(close).next().unwrap_or(rest));
-    Some(text)
-}
-
-/// Joins the first paragraph up to its tags (`@param`), unless it is a license or a pragma.
-fn summary(text: &[&str]) -> Option<String> {
+/// Joins the first paragraph that is prose, up to its tags (`@param`), skipping headings
+/// and comment markers; None when a license comes first.
+fn summary(text: &str) -> Option<String> {
     let lines: Vec<&str> = text
-        .iter()
-        .map(|line| line.trim().trim_start_matches('*').trim())
+        .lines()
+        .map(|line| line.trim().trim_start_matches(['/', '*', '!']))
+        .map(|line| line.trim_end_matches("*/").trim())
         .collect();
-    let paragraph = lines
-        .split(|line| line.is_empty())
-        .find(|paragraph| !paragraph.is_empty() && !is_heading(paragraph))?;
+    let prose = |paragraph: &[&str]| {
+        let prose = paragraph.iter().take_while(|line| !line.starts_with('@'));
+        prose.copied().collect::<Vec<_>>().join(" ")
+    };
+    let paragraph = lines.split(|line| line.is_empty()).find(|paragraph| {
+        !is_heading(paragraph) && (license(paragraph) || !prose(paragraph).is_empty())
+    })?;
+    (!license(paragraph)).then(|| prose(paragraph))
+}
+
+/// Recognizes a license paragraph, which never describes code.
+fn license(paragraph: &[&str]) -> bool {
     let lower = paragraph.join(" ").to_ascii_lowercase();
-    let license = ["copyright", "spdx-license", "@license", "licensed under"]
-        .iter()
-        .any(|marker| lower.contains(marker));
-    let prose: Vec<&str> = (paragraph.iter())
-        .take_while(|line| !line.starts_with('@'))
-        .copied()
-        .collect();
-    (!license && !prose.is_empty()).then(|| prose.join(" "))
+    let markers = ["copyright", "spdx-license", "@license", "licensed under"];
+    markers.iter().any(|marker| lower.contains(marker))
 }
 
 /// Recognizes a reStructuredText title: one line of text above an underline.
