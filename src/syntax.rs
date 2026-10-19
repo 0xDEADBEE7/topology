@@ -81,7 +81,7 @@ pub fn doc(spec: &Spec, source: &str, node: Node<'_>, anchor: Node<'_>) -> Optio
         let doc = is_doc(spec, &source[node.byte_range()]);
         if doc {
             text.insert_str(0, &doc_text(source, node));
-        } else if !text.is_empty() || !spec.attributes.contains(&node.kind()) {
+        } else if !spec.attributes.contains(&node.kind()) {
             break;
         }
         let block = node.kind() == "comment" && doc;
@@ -90,11 +90,12 @@ pub fn doc(spec: &Spec, source: &str, node: Node<'_>, anchor: Node<'_>) -> Optio
     summary(&text)
 }
 
-/// Recognizes a doc comment or attribute (`///` but not `////`, or `#[doc = "…"]`).
+/// Recognizes a doc comment or attribute (`///` but not `////`, `/**` but not `/***`, or
+/// `#[doc = "…"]`).
 fn is_doc(spec: &Spec, text: &str) -> bool {
     spec.docs.iter().any(|prefix| {
         let rest = text.strip_prefix(prefix);
-        rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
+        rest.is_some_and(|rest| !rest.starts_with(['/', '*']))
     })
 }
 
@@ -141,6 +142,10 @@ fn doc_text(source: &str, node: Node<'_>) -> String {
         "comment" if summary(text).is_none() => String::new(),
         "comment" => format!("{text}\n\n"),
         "doc_comment" | "string_content" => format!("{text}\n"),
+        "attribute_item" => {
+            let value = text[9..].trim_end_matches("\"]").replace("\\\"", "\"");
+            value.replace("\\n", "\n") + "\n"
+        }
         _ => (node.named_children(&mut node.walk()))
             .map(|part| doc_text(source, part))
             .collect(),
@@ -170,7 +175,7 @@ fn summary(text: &str) -> Option<String> {
 /// A line without its comment markers (`/**`, `/*!`, `*`, `*/`) or surrounding space.
 fn unmarked(line: &str) -> &str {
     let line = line.trim();
-    let markers = ["/**/", "/**", "/*!", "* "];
+    let markers = ["/**/", "/**", "/*!", "//!", "* "];
     let marker = markers.iter().find_map(|m| line.strip_prefix(m));
     let line = marker.unwrap_or(if line == "*" { "" } else { line });
     line.trim_end_matches("*/").trim()

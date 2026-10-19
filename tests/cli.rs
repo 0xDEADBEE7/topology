@@ -224,6 +224,9 @@ fn declarations_carry_docs_signatures_exports_and_parents() {
             "bold true - [pub fn bold()] **Bold** first words.",
             "aliased true - [pub fn aliased()] -",
             "Unit::new true Unit [pub fn new() -> Self] -",
+            "generated true - [pub fn generated()] Joins generated docs.",
+            "escaped true - [pub fn escaped()] First \"paragraph\".",
+            "interleaved true - [pub fn interleaved()] Rebuilds from parts. Reads more detail.",
             "Holder true - [pub struct Holder] Holds a value.",
             "Unit true - [pub struct Unit;] -",
         ]

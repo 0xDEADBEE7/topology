@@ -7,6 +7,13 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+/// A topo command whose git stops at the temporary directory, wherever TMPDIR points.
+fn topo_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_topo"));
+    command.env("GIT_CEILING_DIRECTORIES", std::env::temp_dir());
+    command
+}
+
 struct Project(PathBuf);
 
 impl Project {
@@ -30,7 +37,7 @@ impl Project {
     }
 
     fn run(&self, command: &str) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_topo"))
+        topo_command()
             .args([command, self.0.to_str().unwrap()])
             .output()
             .unwrap()
@@ -243,9 +250,7 @@ fn commands_skip_unreadable_files_and_measure_broken_ones() {
     };
     #[cfg(unix)]
     lock(0o000);
-    let tree = Command::new(env!("CARGO_BIN_EXE_topo"))
-        .arg(&project.0)
-        .output();
+    let tree = topo_command().arg(&project.0).output();
     let outputs = [project.run("score"), project.run("extract"), tree.unwrap()];
     #[cfg(unix)]
     lock(0o755);
@@ -258,7 +263,7 @@ fn commands_skip_unreadable_files_and_measure_broken_ones() {
         let stderr = project.run(command).stderr;
         assert!(String::from_utf8_lossy(&stderr).contains("broken.rs: syntax errors"));
     }
-    let find = Command::new(env!("CARGO_BIN_EXE_topo"))
+    let find = topo_command()
         .args(["find", "works"])
         .current_dir(&project.0)
         .output()
@@ -276,7 +281,7 @@ fn symbol_lookup_reads_only_the_named_file() {
     );
     project.write("broken.rs", "fn broken( {");
     let topo = |target: &str, directory: &Path| {
-        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        let output = topo_command()
             .arg(target)
             .current_dir(directory)
             .output()
@@ -300,10 +305,7 @@ fn tree_nests_a_directory_beside_its_same_named_file() {
     project.write("a.rs", "//! First file.\n");
     project.write("a/b.rs", "//! Nested file.\n");
     project.write("c.rs", "fn c() {}\n");
-    let output = Command::new(env!("CARGO_BIN_EXE_topo"))
-        .arg(&project.0)
-        .output()
-        .unwrap();
+    let output = topo_command().arg(&project.0).output().unwrap();
     let tree = String::from_utf8(output.stdout).unwrap();
     let body: Vec<_> = tree.lines().skip(1).collect();
     assert_eq!(
@@ -333,6 +335,10 @@ fn tree_descriptions_skip_licenses_pragmas_and_headings() {
         "#!/usr/bin/env python\n\"\"\"\nTools\n=====\n\nRuns tools.\n\"\"\"",
     );
     project.write("flags.rs", "//!\n//! Parses flags.\nfn main() {}");
+    project.write(
+        "bang.ts",
+        "#!/usr/bin/env node\n//! Starts the CLI.\nmain();\n",
+    );
     project.write("empty.ts", "/**\n */\nexport const x = 1;");
     project.write(
         "lint.ts",
@@ -343,16 +349,14 @@ fn tree_descriptions_skip_licenses_pragmas_and_headings() {
         "a_file_name_long_enough_to_push_every_other_description_off_the_screen.rs",
         "fn f() {}",
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_topo"))
-        .arg(&project.0)
-        .output()
-        .unwrap();
+    let output = topo_command().arg(&project.0).output().unwrap();
     let tree = String::from_utf8(output.stdout).unwrap();
     let described = |entry: &str, doc: &str| {
         tree.lines()
             .any(|line| line.starts_with(&format!("{entry}  #─")) && line.ends_with(doc))
     };
     assert!(described("├─ flags.rs", "─ Parses flags."), "{tree}");
+    assert!(described("├─ bang.ts", "─ Starts the CLI."), "{tree}");
     assert!(described("├─ lint.ts", "─ Lints."), "{tree}");
     assert!(described("├─ menu.tsx", "─ Renders the menu."), "{tree}");
     assert!(described("└─ tools.py", "─ Runs tools."), "{tree}");
@@ -428,7 +432,7 @@ fn find_matches_qualified_names_and_the_tree_reads_a_linked_root() {
         "pub struct FileInfo {}\nimpl FileInfo {\n    pub fn units(&self) {}\n}\n",
     );
     let topo = |args: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        let output = topo_command()
             .args(args)
             .current_dir(&project.0)
             .output()
@@ -474,7 +478,7 @@ fn discovery_keeps_sources_and_skips_generated_and_installed_code() {
     #[cfg(unix)]
     std::os::unix::fs::symlink(project.0.join("real"), project.0.join("linked")).unwrap();
     let topo = |args: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        let output = topo_command()
             .args(args)
             .current_dir(&project.0)
             .output()
@@ -543,7 +547,7 @@ fn scans_follow_git_ignores_and_score_skips_tests_unless_asked() {
     }
     project.write(".gitignore", "ignored/\n");
     let topo = |args: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        let output = topo_command()
             .args(args)
             .current_dir(&project.0)
             .output()

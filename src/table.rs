@@ -63,7 +63,7 @@ fn cells((label, values, _): &Row, widths: &[usize], colour: bool) -> Vec<String
 fn column_widths(headers: &[&str], rows: &[Row]) -> Vec<usize> {
     let mut widths: Vec<usize> = headers.iter().map(|header| header.len()).collect();
     for (label, values, _) in rows {
-        widths[0] = widths[0].max(label.len());
+        widths[0] = widths[0].max(label.chars().count());
         for (width, (value, _)) in widths[1..].iter_mut().zip(values) {
             *width = (*width).max(value.len());
         }

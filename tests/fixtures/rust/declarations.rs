@@ -33,3 +33,16 @@ pub struct Unit;
 
 /// Implements the unit.
 impl Unit { pub fn new() -> Self { Unit } }
+
+#[doc = "Joins generated docs."]
+#[doc = ""]
+#[doc = "*Generated detail.*"]
+pub fn generated() {}
+
+#[doc = " First \"paragraph\".\n\n Second paragraph."]
+pub fn escaped() {}
+
+/// Rebuilds from parts.
+// A plain comment inside the doc.
+/// Reads more detail.
+pub fn interleaved() {}

@@ -1,5 +1,8 @@
 .DEFAULT_GOAL := help
 
+# The release binary, wherever CARGO_TARGET_DIR puts it.
+export TOPO_BIN := $(or $(CARGO_TARGET_DIR),target)/release/topo
+
 .PHONY: help build test lint check metrics extract tree project-tree repo-tree clean
 
 help:
@@ -17,17 +20,17 @@ lint:
 check: lint test
 
 extract: build
-	@target/release/topo extract $(REPO)
+	@$(TOPO_BIN) extract $(REPO)
 
-metrics:
+metrics: build
 	@.scripts/metrics.sh
 
 tree: project-tree
 
-project-tree:
+project-tree: build
 	@bash .scripts/show-tree.sh project
 
-repo-tree:
+repo-tree: build
 	@bash .scripts/show-tree.sh repo
 
 clean:

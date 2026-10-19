@@ -75,12 +75,10 @@ fn score(args: &[&str]) -> Result<(), String> {
             path => paths.push(path),
         }
     }
-    if paths.is_empty() {
-        paths.push(".");
-    }
+    let paths = if paths.is_empty() { vec!["."] } else { paths };
     let analysed: Vec<_> = paths::analyse(&paths, Path::new("."), tests)?.collect();
     if analysed.is_empty() {
-        return Err("no supported source files could be analysed".to_owned());
+        return Err("no supported source files to score (tests need --tests)".to_owned());
     }
     report::print_table(&analysed, &options);
     if options.guide {

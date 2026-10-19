@@ -118,9 +118,13 @@ fn show_symbol(path: &str, name: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Reads and analyses one named file.
+/// Reads and analyses one named file, refusing anything else (a FIFO would block).
 fn read(path: &str) -> Result<(String, FileInfo), String> {
-    let source = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let error = |e: std::io::Error| format!("{path}: {e}");
+    if !fs::metadata(path).map_err(error)?.is_file() {
+        return Err(format!("{path}: not a file"));
+    }
+    let source = fs::read_to_string(path).map_err(error)?;
     let file = crate::walk::analyse(path, &source).map_err(|e| format!("{path}: {e}"))?;
     Ok((source, file))
 }

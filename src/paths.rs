@@ -74,10 +74,10 @@ fn scan(directory: &Path, tests: bool) -> Result<Vec<PathBuf>, String> {
 }
 
 /// Lists the regular files git tracks or would track under `directory`; none outside a
-/// repository or without git.
+/// repository or without git. The repository's file monitor hook is not run.
 fn git_files(directory: &Path) -> Vec<PathBuf> {
     let mut git = Command::new("git");
-    git.arg("-C").arg(directory);
+    git.args(["-c", "core.fsmonitor=0", "-C"]).arg(directory);
     git.args(["ls-files", "-co", "--exclude-standard", "-z"]);
     let listed = git.output().map(|output| output.stdout).unwrap_or_default();
     let names = listed.split(|byte| *byte == 0);
