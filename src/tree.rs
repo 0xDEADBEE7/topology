@@ -56,11 +56,12 @@ fn read_docstring(directory: &Path) -> Option<String> {
 /// Displays a file description and its declaration outline.
 fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
     let (description, mut symbols) = crate::extract::file_outline(path)?;
-    symbols.sort_by_key(|s| (s.lines[0], std::cmp::Reverse(s.lines[1])));
-    let rows: Vec<_> = (symbols.iter().enumerate())
-        .map(|(index, s)| {
+    symbols.sort_by_key(|s| (s.lines[0], std::cmp::Reverse(s.lines[1]), s.kind != "class"));
+    let rows: Vec<_> = (symbols.iter())
+        .map(|s| {
             let contains = |o: &&SymbolInfo| o.lines[0] <= s.lines[0] && s.lines[1] <= o.lines[1];
-            let depth = symbols[..=index].iter().filter(contains).count();
+            let containers = symbols.iter().filter(contains);
+            let depth = 1 + containers.filter(|o| o.lines != s.lines).count();
             let indent = "  ".repeat(depth);
             let row = format!("{indent}{} (L{}–{})", s.name, s.lines[0], s.lines[1]);
             (row, s.description.clone())

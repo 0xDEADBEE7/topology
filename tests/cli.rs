@@ -118,7 +118,9 @@ fn react_semantics_name_fold_and_rate_functions() {
     );
     let ids: std::collections::HashSet<_> = records.iter().map(|r| &r["id"]).collect();
     assert_eq!(ids.len(), records.len(), "ids must be unique");
-    assert!(topo(&[path]).contains("\n    Store.increment (L25–27)"));
+    let outline = topo(&[path]);
+    assert!(outline.contains("\n    Store.increment (L25–27)"));
+    assert!(outline.contains("\n  register(…) (L79–79)\n  register(…) (L79–79)\n"));
 }
 
 /// Rust and Python units follow the same naming, documentation and SonarSource rules.
