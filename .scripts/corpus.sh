@@ -2,7 +2,7 @@
 # Runs topo against pinned real-world repositories and compares runs.
 #   corpus.sh fetch          clone the pinned corpus into $CORPUS_DIR (.local/corpus)
 #   corpus.sh run BIN OUT    record extract, score and tree output plus a summary in OUT
-#   corpus.sh diff A B       compare two run directories
+#   corpus.sh diff A B       compare two runs; IGNORE='del(.field)' drops fields first
 set -euo pipefail
 
 corpus=${CORPUS_DIR:-.local/corpus}
@@ -18,7 +18,7 @@ repos=(
 fetch() {
     for entry in "${repos[@]}"; do
         read -r name url commit <<< "$entry"
-        [[ -d "$corpus/$name/.git" ]] && continue
+        [[ $(git -C "$corpus/$name" rev-parse -q --verify HEAD 2>/dev/null) == "$commit" ]] && continue
         git init -q "$corpus/$name"
         git -C "$corpus/$name" fetch -q --depth 1 "$url" "$commit"
         git -C "$corpus/$name" checkout -q FETCH_HEAD
@@ -38,6 +38,7 @@ stats() {
       (map(select(.type == "function"))) as $fns
       | ((map(.id) | length) - (map(.id) | unique | length)) as $dups
       | "files=\(map(select(.type == "file")) | length)"
+        + " partial=\(map(select(.type == "file" and (.metrics.parse_errors // 0) > 0)) | length)"
         + " functions=\($fns | length)"
         + " anonymous=\($fns | map(select(.name == "<anonymous>")) | length)"
         + " bogus_imports=\(map(select(.type == "import" and (.source | test("[{}\\s]")))) | length)"
@@ -54,7 +55,7 @@ run() {
         local dir="$corpus/$name" base="$out/$name"
         local extract score tree
         extract=$(timed "$base.extract" "$bin" extract "$dir")
-        score=$(timed "$base.score" "$bin" score "$dir" --all-metrics --no-colour)
+        score=$(timed "$base.score" "$bin" score "$dir")
         tree=$(timed "$base.tree" "$bin" "$dir")
         printf '%s extract=%s score=%s tree=%s stderr_lines=%s %s seconds=%s/%s/%s\n' \
             "$name" "$extract" "$score" "$tree" "$(wc -l < "$base.extract.err" | tr -d ' ')" \
@@ -69,7 +70,8 @@ compare() {
     diff "$a/summary.txt" "$b/summary.txt" || true
     for entry in "${repos[@]}"; do
         read -r name _ <<< "$entry"
-        diff <(sort "$a/$name.extract.out") <(sort "$b/$name.extract.out") \
+        diff <(jq -c "${IGNORE:-.}" "$a/$name.extract.out" | sort) \
+            <(jq -c "${IGNORE:-.}" "$b/$name.extract.out" | sort) \
             | sed -n 's/^[<>] //p' | jq -r '.path' | sort -u > "$b/$name.changed" || true
         echo "$name: $(wc -l < "$b/$name.changed" | tr -d ' ') files with changed records ($b/$name.changed)"
     done

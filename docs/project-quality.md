@@ -58,4 +58,6 @@ rely on their names and contracts.
 `.scripts/corpus.sh` checks behaviour on real repositories pinned to fixed
 commits: `fetch` clones them into `.local/corpus`, `run BIN OUT` records extract,
 score and tree output with a one-line summary per repository, and `diff A B`
-lists the files whose records changed between two binaries.
+lists the files whose records changed between two binaries. Set
+`IGNORE='del(.metrics.parse_errors)'` (any jq filter) to drop fields a milestone
+changes on purpose before comparing.
