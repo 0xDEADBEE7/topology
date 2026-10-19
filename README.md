@@ -1,8 +1,6 @@
-# topo
-
----
 ```text
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
+                            T O P O L O G Y
                         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢀⢢⢪⢺⢪⢻⢿⢾⣦⢢⢢⢠⢀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢪⢪⢫⢊⠫⠻⠻⠻⢻⢻⢻⢿⢿⣿⣿⣿⣦⣢⢀⠀⠀⢀⢀⢀⢠⢠⢀⢀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -19,7 +17,7 @@
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢻⢻⢿⢿⣶⢤⢀⢀⢀⢀⢀⢠⣠⣤⣶⣾⣿⢿⢿⢻⠋⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠋⢻⢻⢻⢿⢿⢿⢿⢿⢿⢿⢿⢻⢻⠋⠋⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠈⠉⠋⠋⠋⠋⠉⠈⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ```
 ---
 
@@ -29,7 +27,7 @@ TypeScript, TSX and JavaScript with tree-sitter, runs nothing from the project (
 asks git which files it tracks), and stays small itself: about 1,400 lines of Rust in nine
 files, all of them green on its own score.
 
-## Install
+# Install
 
 ```bash
 cargo install --path .        # or: cargo build --release, then target/release/topo
@@ -38,7 +36,7 @@ cargo install --path .        # or: cargo build --release, then target/release/t
 It needs Rust 1.90 or newer, and git for `.gitignore`-aware discovery (without git, topo
 walks the directories).
 
-## Read a repository from the top down
+# Read a repository from the top down
 
 A directory shows its files with their descriptions:
 
@@ -97,7 +95,7 @@ tests/fixtures/typescript/declarations.ts::Counter.increment [function] (L25–2
 tests/fixtures/typescript/semantics.tsx::Store.increment [function] (L25–27)
 ```
 
-## Rate functions
+# Rate functions
 
 `score` rates each function by its code lines and cognitive complexity and lists the
 yellow and red ones under their files (`--detail` lists every function). Tests and stories
@@ -144,7 +142,7 @@ $ topo score --guide tests/fixtures/typescript/basic.ts
 A function takes its worst band. File lines and docs are shown, not rated.
 ```
 
-## Export records
+# Export records
 
 `extract` prints one JSON record per file, import and declaration, for other tools:
 
@@ -155,7 +153,7 @@ $ topo extract tests/fixtures/typescript/basic.ts
 {"description":null,"exported":false,"id":"basic.ts#function:render:9","language":"typescript","lines":[9,11],"metrics":{"band":"green","cognitive":1,"loc":3},"name":"render","parent":null,"path":"basic.ts","signature":"const render = (value: number): string =>","type":"function"}
 ```
 
-## Documentation
+# Documentation
 
 - [Usage](./docs/usage.md): commands, exit codes, what topo reads, record fields, and how to
   add a language.
@@ -164,7 +162,7 @@ $ topo extract tests/fixtures/typescript/basic.ts
 - [Code style](./docs/code-style.md): writing code that reads well in topo.
 - [Roadmap](./docs/roadmap.md): how topo got here, with each milestone's measurements.
 
-## Development
+# Development
 
 `make check` runs rustfmt, Clippy with warnings denied, the tests, and every command in this
 README, comparing its output with what is shown here. The tests also hold topo to its own
