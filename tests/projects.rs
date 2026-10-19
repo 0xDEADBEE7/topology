@@ -46,7 +46,8 @@ impl Drop for Project {
 #[test]
 fn project_commands_exclude_dependencies_and_resolve_tsx() {
     let project = Project::new();
-    project.write("src/App.tsx", "/** Application entry. */\nimport { Card } from './ui';\nexport function App() { return <Card />; }");
+    project.write("src/App.tsx", "/** Application entry. */\nimport { Card } from './ui';\nimport { config } from './config.mjs';\nimport { pick } from './App.selection';\nexport function App() { return <Card />; }");
+    project.write("src/App.selection.ts", "export const pick = () => 1;");
     project.write(
         "src/ui/index.tsx",
         "/** A greeting card. */\nexport const Card = () => <div />;",
@@ -77,11 +78,20 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
             .iter()
             .filter(|record| record["type"] == "file")
             .count(),
-        3
+        4
     );
-    assert!(records
-        .iter()
-        .any(|record| record["type"] == "import" && record["resolved_path"] == "src/ui/index.tsx"));
+    let resolved = |source: &str| {
+        records
+            .iter()
+            .find(|record| record["type"] == "import" && record["source"] == source)
+            .map(|record| record["resolved_path"].clone())
+    };
+    assert_eq!(resolved("./ui"), Some("src/ui/index.tsx".into()));
+    assert_eq!(resolved("./config.mjs"), Some("src/config.mts".into()));
+    assert_eq!(
+        resolved("./App.selection"),
+        Some("src/App.selection.ts".into())
+    );
 }
 
 #[test]

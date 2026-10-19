@@ -1,6 +1,6 @@
 //! Resolves repository-local imports to supported source paths.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Resolve an import against files local to the repository.
 pub(super) fn resolve_import(
@@ -30,15 +30,7 @@ pub(super) fn resolve_import(
             .parent()
             .unwrap_or(Path::new("."))
             .join(source);
-        let base = root.join(base);
-        let mut candidates = vec![base.clone()];
-        for extension in crate::adapters::ECMA_EXTENSIONS {
-            let mut file = base.clone().into_os_string();
-            file.push(format!(".{extension}"));
-            candidates.push(file.into());
-            candidates.push(base.join(format!("index.{extension}")));
-        }
-        candidates
+        script_candidates(&root.join(base))
     } else {
         return None;
     };
@@ -53,4 +45,21 @@ pub(super) fn resolve_import(
                     .map(|p| p.to_string_lossy().to_string())
             })
     })
+}
+
+/// Lists files a relative script import may name: the path itself, the path with each
+/// script extension or index file, and TypeScript sources imported by their `.js` names.
+fn script_candidates(base: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![base.to_owned()];
+    for extension in crate::adapters::ECMA_EXTENSIONS {
+        let mut file = base.as_os_str().to_owned();
+        file.push(format!(".{extension}"));
+        candidates.push(file.into());
+        candidates.push(base.join(format!("index.{extension}")));
+    }
+    let emitted = base.extension().and_then(|ext| ext.to_str());
+    if matches!(emitted, Some("js" | "jsx" | "mjs" | "cjs")) {
+        candidates.extend(["ts", "tsx", "mts", "cts"].map(|ts| base.with_extension(ts)));
+    }
+    candidates
 }
