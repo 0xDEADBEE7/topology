@@ -1,7 +1,10 @@
+//! Collects Rust declarations and delegates function-body measurements.
+
 use crate::visitor::BlockVisitor;
 use syn::{spanned::Spanned, visit::Visit, File, ImplItemFn, ItemFn, ItemStruct};
 
 #[derive(Debug, Default, Clone)]
+/// Carries source locations and raw counts into metric computation.
 pub struct RawCounts {
     pub name: String,
     pub line_start: usize,

@@ -1,3 +1,5 @@
+//! Registers language adapters and their supported source extensions.
+
 pub mod base;
 pub mod common;
 pub mod python;
@@ -14,7 +16,7 @@ pub fn for_path(path: &str) -> Result<Box<dyn Adapter>, String> {
     {
         Some("rs") => Ok(Box::new(rust::RustAdapter)),
         Some("py") => Ok(Box::new(python::PythonAdapter)),
-        Some("ts") | Some("tsx") => Ok(Box::new(typescript::TypeScriptAdapter)),
+        Some("ts" | "tsx" | "mts" | "cts") => Ok(Box::new(typescript::TypeScriptAdapter)),
         Some(extension) => Err(format!("unsupported language: .{extension}")),
         None => Err("cannot determine language: file has no extension".to_owned()),
     }

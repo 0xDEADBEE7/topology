@@ -1,0 +1,117 @@
+//! Verifies project discovery, local React imports, and failure reporting.
+
+use std::{
+    fs,
+    path::PathBuf,
+    process::{Command, Output},
+};
+
+struct Project(PathBuf);
+
+impl Project {
+    fn new() -> Self {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("topology-test-{}-{stamp}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        Self(root)
+    }
+
+    fn write(&self, path: &str, source: &str) {
+        let path = self.0.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, source).unwrap();
+    }
+
+    fn run(&self, command: &str) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_topo"))
+            .args([command, self.0.to_str().unwrap()])
+            .output()
+            .unwrap()
+    }
+}
+
+impl Drop for Project {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+
+#[test]
+fn project_commands_exclude_dependencies_and_resolve_tsx() {
+    let project = Project::new();
+    project.write("src/App.tsx", "/** Application entry. */\nimport { Card } from './ui';\nexport function App() { return <Card />; }");
+    project.write(
+        "src/ui/index.tsx",
+        "/** A greeting card. */\nexport const Card = () => <div />;",
+    );
+    project.write("src/config.mts", "export const config = () => true;");
+    for directory in ["node_modules", "dist", "coverage", ".next"] {
+        project.write(&format!("{directory}/invalid.tsx"), "const broken = <;");
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&project.0, project.0.join("src/loop")).unwrap();
+    let score = project.run("score");
+    assert!(
+        score.status.success(),
+        "{}",
+        String::from_utf8_lossy(&score.stderr)
+    );
+    assert!(score.stderr.is_empty());
+    let extract = project.run("extract");
+    assert!(extract.status.success());
+    assert!(extract.stderr.is_empty());
+    let records: Vec<serde_json::Value> = String::from_utf8(extract.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record["type"] == "file")
+            .count(),
+        3
+    );
+    assert!(records
+        .iter()
+        .any(|record| record["type"] == "import" && record["resolved_path"] == "src/ui/index.tsx"));
+}
+
+#[test]
+fn scoring_reports_invalid_source_and_empty_projects() {
+    let project = Project::new();
+    assert!(!project.run("score").status.success());
+    project.write("invalid.tsx", "const broken = <;");
+    let output = project.run("score");
+    assert!(!output.status.success());
+    assert!(String::from_utf8(output.stderr)
+        .unwrap()
+        .contains("parse error"));
+}
+
+#[test]
+fn symbol_descriptions_include_preceding_rust_and_jsdoc_comments() {
+    let project = Project::new();
+    project.write(
+        "sample.rs",
+        "//! Rust fixture.\n/// Explains the Rust function.\npub fn sample() {}\n",
+    );
+    project.write("sample.ts", "/** Module description. */\n/**\n * Explains the component.\n */\nexport const sample = () => true;\n");
+    let output = project.run("extract");
+    assert!(output.status.success());
+    let records: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(records
+        .iter()
+        .any(|record| record["description"] == "Explains the Rust function."));
+    assert!(records.iter().any(|record| record["description"]
+        .as_str()
+        .is_some_and(|doc| doc.contains("Explains the component."))));
+}

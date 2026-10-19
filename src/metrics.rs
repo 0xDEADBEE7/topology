@@ -3,6 +3,7 @@
 use crate::visit::RawCounts;
 
 #[derive(Debug)]
+/// Reports a function's source extent, documentation, and complexity.
 pub struct FnMetrics {
     pub name: String,
     pub line_start: usize,
@@ -15,12 +16,14 @@ pub struct FnMetrics {
 }
 
 #[derive(Debug)]
+/// Locates a class or structure in its source file.
 pub struct ClassMetrics {
     pub name: String,
     pub line_start: usize,
     pub line_end: usize,
 }
 
+/// Combines declaration metrics with file-level maintainability indicators.
 pub struct FileMetrics {
     pub language: &'static str,
     pub path: String,

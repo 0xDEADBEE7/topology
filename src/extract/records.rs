@@ -1,8 +1,9 @@
 //! Builds serialized file, import, and symbol records for one source file.
 
-use super::models::{Export, FileRecord, Metrics, SymbolMetrics, SymbolRecord};
+use super::models::{Export, FileRecord, Metrics};
+use super::symbols::symbol;
 use super::{imports, metadata};
-use crate::metrics::{ClassMetrics, FnMetrics};
+
 use std::{fs, path::Path};
 
 /// Parse one source file and assemble its file, import, and symbol records.
@@ -34,23 +35,7 @@ pub(super) fn records(
                 .filter_map(|item| export(language, &source, item.line_start, item.line_end)),
         )
         .collect();
-    let file = FileRecord {
-        id: relative.clone(),
-        record_type: "file",
-        repo: repo.to_owned(),
-        path: relative.clone(),
-        description: metadata::docstring(language, &source, None),
-        imports: import_ids,
-        exports,
-        metrics: Metrics {
-            language,
-            loc: analysed.loc,
-            cc: analysed.cc,
-            cognitive: analysed.cognitive,
-            halstead: analysed.halstead,
-            nmi: analysed.nmi,
-        },
-    };
+    let file = file_record(&relative, repo, &source, &analysed, import_ids, exports);
     let mut output = vec![serde_json::to_value(file).map_err(|e| e.to_string())?];
     output.extend(
         imports
@@ -84,73 +69,31 @@ fn export(language: &str, source: &str, start: usize, end: usize) -> Option<Expo
     })
 }
 
-fn symbol<T>(
-    path: &str,
+/// Combines file metadata with the adapter's aggregate measurements.
+fn file_record(
+    relative: &str,
     repo: &str,
-    language: &str,
     source: &str,
-    item: &T,
-    kind: &'static str,
-) -> Result<serde_json::Value, String>
-where
-    T: Item,
-{
-    serde_json::to_value(SymbolRecord {
-        id: format!("{}#{}:{}:{}", path, kind, item.name(), item.start()),
-        record_type: kind,
+    analysed: &crate::metrics::FileMetrics,
+    imports: Vec<String>,
+    exports: Vec<Export>,
+) -> FileRecord {
+    let language = analysed.language;
+    FileRecord {
+        id: relative.to_owned(),
+        record_type: "file",
         repo: repo.to_owned(),
-        path: path.to_owned(),
-        name: item.name().to_owned(),
-        kind,
-        qualified_name: metadata::qualified_name(path, item.name()),
-        language: metadata::language_name(language),
-        visibility: metadata::visibility(language, source, item.start()),
-        parent: None,
-        signature: metadata::signature(language, source, item.start()),
-        lines: [item.start(), item.end()],
-        description: metadata::docstring(language, source, Some(item.start())),
-        metrics: item.metrics(),
-    })
-    .map_err(|e| e.to_string())
-}
-
-trait Item {
-    fn name(&self) -> &str;
-    fn start(&self) -> usize;
-    fn end(&self) -> usize;
-    fn metrics(&self) -> Option<SymbolMetrics>;
-}
-
-impl Item for FnMetrics {
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn start(&self) -> usize {
-        self.line_start
-    }
-    fn end(&self) -> usize {
-        self.line_end
-    }
-    fn metrics(&self) -> Option<SymbolMetrics> {
-        Some(SymbolMetrics {
-            loc: self.loc,
-            cc: self.cc,
-            cognitive: self.cognitive,
-            halstead: self.halstead,
-        })
-    }
-}
-impl Item for ClassMetrics {
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn start(&self) -> usize {
-        self.line_start
-    }
-    fn end(&self) -> usize {
-        self.line_end
-    }
-    fn metrics(&self) -> Option<SymbolMetrics> {
-        None
+        path: relative.to_owned(),
+        description: metadata::docstring(language, source, None),
+        imports,
+        exports,
+        metrics: Metrics {
+            language,
+            loc: analysed.loc,
+            cc: analysed.cc,
+            cognitive: analysed.cognitive,
+            halstead: analysed.halstead,
+            nmi: analysed.nmi,
+        },
     }
 }

@@ -1,5 +1,10 @@
 # Handoff: finish `src/extract.rs` decomposition
 
+> Historical handoff. The extraction decomposition is now implemented under
+> `src/extract/`; repository-wide structural regression checks are documented in
+> [Project assessment and quality checks](./project-quality.md). The measurements
+> and remaining-work notes below describe the earlier implementation.
+
 ## Objective
 
 Finish the structural refactor requested in the extraction complexity issue. The target is a small barrel module with single-responsibility submodules and green Topo metrics for every resulting file.

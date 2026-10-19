@@ -1,3 +1,5 @@
+//! Measures control flow and token counts within Rust function bodies.
+
 use syn::{
     visit::{self, Visit},
     Expr, ExprBinary, ExprForLoop, ExprIf, ExprMatch, ExprWhile,
@@ -13,6 +15,7 @@ pub struct BlockVisitor {
 }
 
 impl BlockVisitor {
+    /// Starts an independent function-body measurement.
     pub fn new() -> Self {
         Self {
             depth: 0,

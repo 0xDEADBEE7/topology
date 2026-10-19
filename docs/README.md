@@ -47,8 +47,7 @@ target/release/topo ./src/metrics.rs::compute
 Run the checks used during development:
 
 ```bash
-cargo test --quiet
-cargo check --quiet
+make check
 ```
 
 ---
@@ -59,4 +58,5 @@ cargo check --quiet
 - [User patterns](./ux-patterns/user-patterns.md)
 - [Definitions](./ux-patterns/definitions.md)
 - [Code style](./code-style.md)
+- [Project assessment and quality checks](./project-quality.md)
 - [Refactor handoff](./extract-refactor-handoff.md)

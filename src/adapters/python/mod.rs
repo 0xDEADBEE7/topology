@@ -2,6 +2,7 @@
 
 use super::{common, Adapter};
 
+/// Provides approximate metrics for Python declarations.
 pub struct PythonAdapter;
 
 impl Adapter for PythonAdapter {

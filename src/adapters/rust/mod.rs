@@ -1,6 +1,9 @@
+//! Adapts Rust syntax trees to shared file and function metrics.
+
 use super::Adapter;
 use crate::{metrics, visit};
 
+/// Measures Rust functions and structures through syn visitors.
 pub struct RustAdapter;
 
 impl Adapter for RustAdapter {

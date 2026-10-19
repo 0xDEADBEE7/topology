@@ -3,6 +3,7 @@
 use serde::Serialize;
 
 #[derive(Clone, Serialize)]
+/// Describes an import and any resolved local target.
 pub(super) struct ImportRecord {
     pub(super) id: String,
     #[serde(rename = "type")]
@@ -20,6 +21,7 @@ pub(super) struct ImportRecord {
 }
 
 #[derive(Serialize)]
+/// Describes a source file, its dependencies, and its aggregate metrics.
 pub(super) struct FileRecord {
     pub(super) id: String,
     #[serde(rename = "type")]
@@ -33,6 +35,7 @@ pub(super) struct FileRecord {
 }
 
 #[derive(Serialize)]
+/// Describes a declaration and its source location for index consumers.
 pub(super) struct SymbolRecord {
     pub(super) id: String,
     #[serde(rename = "type")]
@@ -52,6 +55,7 @@ pub(super) struct SymbolRecord {
 }
 
 #[derive(Serialize)]
+/// Describes a declaration exposed by a source file.
 pub(super) struct Export {
     pub(super) signature: String,
     pub(super) lines: [usize; 2],
@@ -59,6 +63,7 @@ pub(super) struct Export {
 }
 
 #[derive(Serialize)]
+/// Serializes the measurements associated with a function.
 pub(super) struct SymbolMetrics {
     pub(super) loc: usize,
     pub(super) cc: u32,
@@ -67,6 +72,7 @@ pub(super) struct SymbolMetrics {
 }
 
 #[derive(Serialize)]
+/// Serializes file-level complexity and maintainability measurements.
 pub(super) struct Metrics {
     pub(super) language: &'static str,
     pub(super) loc: usize,
