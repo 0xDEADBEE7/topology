@@ -106,7 +106,7 @@ impl Walker<'_> {
         } else if function || self.spec.closures.contains(&kind) {
             (unit, nesting, BODY)
         } else {
-            (unit, nesting, self.rate(node, unit, nesting))
+            (unit, nesting, self.increment(node, unit, nesting))
         };
         let mut cursor = node.walk();
         let mut more = cursor.goto_first_child();
@@ -115,20 +115,6 @@ impl Walker<'_> {
             self.walk(cursor.node(), unit, nesting + u32::from(deeper));
             more = cursor.goto_next_sibling();
         }
-    }
-
-    /// Adds a node's cognitive increment to its unit and returns the fields it nests deeper.
-    fn rate(
-        &mut self,
-        node: Node<'_>,
-        unit: Option<usize>,
-        nesting: u32,
-    ) -> &'static [&'static str] {
-        let (increment, nested) = self.increment(node, nesting);
-        if let Some(index) = unit {
-            self.fns[index].cognitive += increment;
-        }
-        nested
     }
 
     /// Starts a named unit; its lines then no longer count for the unit containing it.
@@ -358,16 +344,19 @@ impl Walker<'_> {
         name.is_some_and(|name| self.spec.wrapper_calls.contains(&name))
     }
 
-    /// Rates structures, `if`/`else`, labelled jumps and logical runs, with the fields they nest.
-    fn increment(&self, node: Node<'_>, nesting: u32) -> (u32, &'static [&'static str]) {
+    /// Adds the increment of a structure, `if`/`else`, labelled jump or logical run to `unit`
+    /// and returns the fields it nests.
+    fn increment(
+        &mut self,
+        node: Node<'_>,
+        unit: Option<usize>,
+        nesting: u32,
+    ) -> &'static [&'static str] {
         let (spec, kind) = (self.spec, node.kind());
-        if let Some((_, nested)) = spec
+        let structure = spec
             .structures
             .iter()
-            .find(|(structure, _)| *structure == kind)
-        {
-            return (1 + nesting, *nested);
-        }
+            .find(|(structure, _)| *structure == kind);
         let [if_kind, else_kind] = spec.conditional;
         let parent_is = |kind| node.parent().is_some_and(|p| p.kind() == kind);
         let first_is = |kind| {
@@ -375,15 +364,20 @@ impl Walker<'_> {
             let mut statements = node.named_children(&mut cursor).filter(|c| !c.is_extra());
             statements.next().is_some_and(|c| c.kind() == kind)
         };
-        match kind {
-            _ if kind == if_kind && parent_is(else_kind) => (1, &["consequence"]),
-            _ if kind == if_kind => (1 + nesting, &["consequence"]),
-            _ if spec.elif.contains(&kind) => (1, &["consequence"]),
-            _ if kind == else_kind && first_is(if_kind) => (0, NOTHING),
-            _ if kind == else_kind => (1, &["", "body"]),
-            _ if spec.jumps.contains(&kind) => (u32::from(self.labelled(node)), NOTHING),
-            _ => (self.logical_sequences(node), NOTHING),
+        let (increment, nested): (u32, &[&str]) = match structure {
+            Some((_, nested)) => (1 + nesting, *nested),
+            None if kind == if_kind && parent_is(else_kind) => (1, &["consequence"]),
+            None if kind == if_kind => (1 + nesting, &["consequence"]),
+            None if spec.elif.contains(&kind) => (1, &["consequence"]),
+            None if kind == else_kind && first_is(if_kind) => (0, NOTHING),
+            None if kind == else_kind => (1, &["", "body"]),
+            None if spec.jumps.contains(&kind) => (u32::from(self.labelled(node)), NOTHING),
+            None => (self.logical_sequences(node), NOTHING),
+        };
+        if let Some(index) = unit {
+            self.fns[index].cognitive += increment;
         }
+        nested
     }
 
     /// Recognizes a jump to a label, given as a field (TypeScript) or a child (Rust).
