@@ -14,7 +14,10 @@ pub fn find(root: &str, query: &str) -> Result<Vec<SymbolInfo>, String> {
         for value in file_records(&root, &repo, &path) {
             if let Some(symbol) = symbol_info(&value) {
                 let path_name = format!("{}::{}", symbol.path, symbol.name);
-                if symbol.name == query || symbol.qualified_name == query || path_name == query {
+                if is_named(&symbol.name, query)
+                    || symbol.qualified_name == query
+                    || path_name == query
+                {
                     matches.push(symbol);
                 }
             }
@@ -22,4 +25,12 @@ pub fn find(root: &str, query: &str) -> Result<Vec<SymbolInfo>, String> {
     }
     matches.sort_by(|a, b| a.path.cmp(&b.path).then(a.lines[0].cmp(&b.lines[0])));
     Ok(matches)
+}
+
+/// Matches a symbol by its full name or, for members such as `View.render`, its last segment.
+pub fn is_named(symbol: &str, query: &str) -> bool {
+    symbol == query
+        || symbol
+            .rsplit_once('.')
+            .is_some_and(|(_, member)| member == query)
 }

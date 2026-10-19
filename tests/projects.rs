@@ -112,6 +112,16 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
 }
 
 #[test]
+fn typescript_and_tsx_use_their_own_grammars() {
+    let project = Project::new();
+    for file in ["assertion.ts", "assertion.tsx"] {
+        project.write(file, "const text = <string>value;");
+    }
+    let stderr = String::from_utf8(project.run("extract").stderr).unwrap();
+    assert!(stderr.contains("assertion.tsx:") && !stderr.contains("assertion.ts:"));
+}
+
+#[test]
 fn scoring_rejects_empty_projects_and_measures_invalid_source() {
     let project = Project::new();
     assert!(!project.run("score").status.success());

@@ -1,6 +1,6 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0, M1 and M2 done.
+Status (October 2026): M0–M3 done.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
@@ -18,9 +18,19 @@ Status (October 2026): M0, M1 and M2 done.
   React repos: bulletproof-react 17%, docusaurus 39%, zustand 51%, excalidraw 55%. Of
   those red lines 36–94% are `<anonymous>`, and 82–99% of the anonymous ones are test
   `describe(...)` callbacks (M3's test-block units and decision 7 address them).
+- M3 verify: `<anonymous>` is 0–0.2% of corpus functions (was 61–87%); duplicate ids 0
+  (was 3–29 per repo); `find Button` and `form.tsx::FormItem` work on bulletproof-react;
+  excalidraw's history.test.tsx yields one unit per `it` (63 of 63), so the test-block rule
+  is in. TypeScript/JavaScript cognitive complexity follows SonarSource 1.7 (the
+  whitepaper's `sumOfPrimes` scores 7). Red shares fell to bulletproof-react 17%,
+  docusaurus 13%, zustand 14%, excalidraw 37% (its largest red functions are genuinely
+  long: an 849-line pointer handler with cognitive 226). Rust and Python output is
+  unchanged. Beyond the plan: a function's lines are the lines it owns (named nested
+  functions count separately), so a `describe` block is not charged for its `it` units.
 - Python and Rust still score the Docs column with their own heuristics until M5.
-- Size: `src` is 34 files and 2,200 lines (M2 −387, beyond its −170 to −230 estimate);
-  budget 34 files, 2,335 lines (M3 plans +80 to +110), yellow share 0‰.
+- Size: `src` is 32 files and 2,299 lines. M3 added about 170 lines of product code,
+  above its +80 to +110 estimate, and moved the TypeScript unit tests to `tests/`
+  (pulled forward from M4). Budget 32 files, 2,324 lines; yellow share 0‰.
 
 ## 1. Recommendation
 

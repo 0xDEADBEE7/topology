@@ -47,7 +47,21 @@ pub(super) fn records(
             metadata::class_kind(language),
         )?);
     }
+    unique_ids(&mut output);
     Ok(output)
+}
+
+/// Suffixes repeated ids (`~1`, `~2`) so every record in a file has its own.
+fn unique_ids(records: &mut [serde_json::Value]) {
+    let mut seen = std::collections::HashMap::new();
+    for record in records {
+        let id = record["id"].as_str().unwrap_or_default().to_owned();
+        let repeats = seen.entry(id.clone()).or_insert(0);
+        if *repeats > 0 {
+            record["id"] = format!("{id}~{repeats}").into();
+        }
+        *repeats += 1;
+    }
 }
 
 fn export(language: &str, source: &str, start: usize, end: usize) -> Option<Export> {

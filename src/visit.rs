@@ -26,6 +26,7 @@ impl FnVisitor {
             line_end,
             cognitive: bv.cognitive,
             has_docstring,
+            nested_lines: 0,
         });
     }
 }

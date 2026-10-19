@@ -40,9 +40,51 @@ fn react_files_support_scoring_inspection_and_extraction() {
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert!(values
-        .iter()
-        .any(|record| record["name"] == "Greeting" && record["language"] == "typescript"));
+    for name in ["Greeting", "App"] {
+        let record = values.iter().find(|r| r["name"] == name).expect(name);
+        assert_eq!(record["language"], "typescript");
+        assert_eq!(record["metrics"]["cognitive"], 1, "{name}");
+        assert!(record["description"].is_string(), "{name} keeps its JSDoc");
+    }
+}
+
+/// Names, folds and rates React and plain functions as roadmap M3 and SonarSource 1.7 specify.
+#[test]
+fn react_semantics_name_fold_and_rate_functions() {
+    let path = "tests/fixtures/typescript/semantics.tsx";
+    let records: Vec<serde_json::Value> = topo(&["extract", path])
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let functions: Vec<_> = records.iter().filter(|r| r["type"] == "function").collect();
+    for (name, loc, cognitive) in [
+        ("Button", 3, 0),
+        ("Card", 1, 0),
+        ("List", 8, 4),
+        ("select", 1, 1),
+        ("default", 1, 0),
+        ("Store.increment", 3, 0),
+        ("Store.reset", 3, 0),
+        ("onSave", 1, 0),
+        ("sumOfPrimes", 12, 7),
+        ("getWords", 10, 1),
+        ("classify", 9, 5),
+        ("describe(\"store\")", 2, 0),
+        ("it(\"increments\")", 5, 1),
+        ("register(…)", 1, 0),
+    ] {
+        let record = functions.iter().find(|r| r["name"] == name).expect(name);
+        let metrics = (&record["metrics"]["loc"], &record["metrics"]["cognitive"]);
+        assert_eq!(metrics, (&loc.into(), &cognitive.into()), "{name}");
+    }
+    assert_eq!(
+        functions.len(),
+        15,
+        "callbacks must fold, not appear as <anonymous>"
+    );
+    let ids: std::collections::HashSet<_> = records.iter().map(|r| &r["id"]).collect();
+    assert_eq!(ids.len(), records.len(), "ids must be unique");
+    assert!(topo(&[path]).contains("\n    Store.increment (L25–27)"));
 }
 
 /// Pins the extract record shapes; regenerate basic.jsonl only for a deliberate change.
@@ -56,8 +98,8 @@ fn extract_output_matches_its_contract() {
 }
 
 /// Size budget for `src`: lower these as the code shrinks, never raise them to pass.
-const MAX_FILES: usize = 34;
-const MAX_LINES: u64 = 2_335;
+const MAX_FILES: usize = 32;
+const MAX_LINES: u64 = 2_324;
 const MAX_DEPENDENCIES: usize = 6;
 /// Largest share of function lines in yellow functions, per mille; ratchets down.
 const MAX_YELLOW_PER_MILLE: u64 = 0;

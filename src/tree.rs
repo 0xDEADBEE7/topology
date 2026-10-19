@@ -1,5 +1,6 @@
 //! Renders repository, file, and symbol topology.
 
+use crate::extract::{is_named, SymbolInfo};
 use std::{collections::BTreeMap, fs, path::Path};
 
 /// Displays repository, file, or symbol detail according to the target path.
@@ -54,14 +55,15 @@ fn read_docstring(directory: &Path) -> Option<String> {
 
 /// Displays a file description and its declaration outline.
 fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
-    let (description, symbols) = crate::extract::file_outline(path)?;
-    let rows: Vec<_> = symbols
-        .into_iter()
+    let (description, mut symbols) = crate::extract::file_outline(path)?;
+    symbols.sort_by_key(|s| (s.lines[0], std::cmp::Reverse(s.lines[1])));
+    let rows: Vec<_> = (symbols.iter())
         .map(|s| {
-            (
-                format!("  {} (L{}–{})", s.name, s.lines[0], s.lines[1]),
-                s.description,
-            )
+            let contains = |o: &&SymbolInfo| o.lines[0] <= s.lines[0] && s.lines[1] <= o.lines[1];
+            let depth = symbols.iter().filter(contains).count();
+            let indent = "  ".repeat(depth);
+            let row = format!("{indent}{} (L{}–{})", s.name, s.lines[0], s.lines[1]);
+            (row, s.description.clone())
         })
         .collect();
     let width = align_width(rows.iter().map(|(prefix, _)| prefix.chars().count()));
@@ -87,7 +89,7 @@ fn show_symbol(path: &str, name: &str) -> Result<(), String> {
                 .iter()
                 .map(|c| (&c.name, c.line_start, c.line_end)),
         )
-        .find_map(|(symbol, start, end)| (symbol == name).then_some((start, end)))
+        .find_map(|(symbol, start, end)| is_named(symbol, name).then_some((start, end)))
         .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
     println!("{path}::{name} (L{start}–{end})");
     for line in source

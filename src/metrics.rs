@@ -7,12 +7,14 @@ pub struct FnMetrics {
     pub line_end: usize,
     pub cognitive: u32,
     pub has_docstring: bool,
+    /// Lines of named functions nested inside, which are measured as their own units.
+    pub nested_lines: usize,
 }
 
 impl FnMetrics {
-    /// Counts the physical lines the function spans.
+    /// Counts the physical lines the function owns, excluding nested named functions.
     pub fn loc(&self) -> usize {
-        self.line_end.saturating_sub(self.line_start) + 1
+        (self.line_end.saturating_sub(self.line_start) + 1).saturating_sub(self.nested_lines)
     }
 }
 

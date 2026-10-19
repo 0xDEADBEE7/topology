@@ -38,6 +38,7 @@ fn collect(language: &str, source: &str) -> Vec<FnMetrics> {
                 line_end: index + 1,
                 cognitive: 0,
                 has_docstring: language == "python" && has_python_docstring(source, index),
+                nested_lines: 0,
             });
         }
         if let Some(function) = current.as_mut() {

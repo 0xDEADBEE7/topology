@@ -10,8 +10,10 @@ cargo run --quiet -- extract /path/to/project
 
 Supported extensions are `.rs`, `.py`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
 `.jsx`, `.mjs`, and `.cjs`. TypeScript and TSX use separate grammars; JavaScript
-uses the TSX grammar. React components, hooks, callbacks,
-and class methods participate in the shared complexity reports. Assessment
+uses the TSX grammar. React components are named by their bindings (including
+through `forwardRef` and `memo`), class members read `Class.method`, test
+callbacks become units such as `it("undoes")`, and other unnamed callbacks fold
+into the function that contains them. Assessment
 does not require installing or executing the target project's dependencies.
 
 Scoring and extraction share deterministic source discovery. Hidden entries,
@@ -42,9 +44,12 @@ Each file row shows its lines and whether it has a module doc, followed by its
 yellow and red functions (`--detail` lists every function). A summary line counts
 the yellow and red functions and the share of function lines they hold, plus doc
 coverage, and `~` marks partially parsed files. Extracted function records carry `loc`, `cognitive`
-and `band`. Lines are physical lines until roadmap M5 counts code lines, and
-cognitive complexity still charges each `match`/`switch` arm until M3 and M5
-apply the SonarSource rules.
+and `band`. A function's lines are the physical lines it owns: named functions
+nested inside it count separately. TypeScript and JavaScript follow SonarSource's
+cognitive complexity rules (a `switch` counts once, `else`/`else if` add 1 without
+nesting, each run of like `&&`/`||` adds 1, `??` and `?.` add nothing, folded
+callbacks nest their bodies). Rust and Python still charge each `match` arm and
+count physical lines until roadmap M5.
 
 Relative imports resolve existing TypeScript and JavaScript files and directory
 indexes. Package imports and tsconfig aliases remain unresolved. This is

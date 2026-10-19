@@ -7,9 +7,6 @@ use tree_sitter::{Node, Parser};
 use tree_sitter_typescript::{LANGUAGE_TSX, LANGUAGE_TYPESCRIPT};
 mod counts;
 mod declarations;
-mod syntax;
-#[cfg(test)]
-mod tests;
 
 /// Assesses TypeScript modules and React components with the matching grammar.
 pub struct TypeScriptAdapter;
@@ -38,7 +35,7 @@ impl Adapter for TypeScriptAdapter {
         let root = tree.root_node();
         let mut fns = Vec::new();
         let mut classes = Vec::new();
-        collect_declarations(root, source.as_bytes(), &mut fns, &mut classes);
+        collect_declarations(root, source.as_bytes(), None, &mut fns, &mut classes);
         Ok(metrics::FileMetrics {
             language,
             path: path.to_owned(),
