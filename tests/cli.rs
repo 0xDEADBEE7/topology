@@ -108,6 +108,9 @@ fn react_semantics_name_fold_and_rate_functions() {
         !functions.iter().any(|r| r["name"] == "Row"),
         "a comparator is not Row"
     );
+    let classes = records.iter().filter(|r| r["type"] == "class");
+    let classes: Vec<_> = classes.map(|r| r["name"].as_str().unwrap()).collect();
+    assert_eq!(classes, ["Store"]);
     assert_eq!(
         functions.len(),
         23,

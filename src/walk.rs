@@ -85,6 +85,10 @@ impl Walker<'_> {
         if self.spec.comments.contains(&kind) || self.is_docstring(node) {
             return;
         }
+        let start = (node.start_position().row, node.start_byte());
+        if node.child_count() == 0 {
+            return self.mark_code(start, node.end_byte());
+        }
         if self.spec.classes.contains(&kind) {
             self.classes.push(ClassMetrics {
                 name: self.class_name(node),
@@ -103,7 +107,7 @@ impl Walker<'_> {
         } else {
             (unit, nesting, self.increment(node, unit, nesting))
         };
-        let (mut cursor, mut gap) = (node.walk(), (node.start_position().row, node.start_byte()));
+        let (mut cursor, mut gap) = (node.walk(), start);
         let mut more = cursor.goto_first_child();
         while more {
             let child = cursor.node();
