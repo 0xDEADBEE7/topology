@@ -26,9 +26,7 @@ pub fn score(args: &[String]) -> Result<(), String> {
         .map(|path| {
             let path = path.to_string_lossy();
             let source = fs::read_to_string(path.as_ref()).map_err(|e| format!("{path}: {e}"))?;
-            adapters::for_path(&path)?
-                .analyse(&path, &source)
-                .map_err(|e| format!("{path}: {e}"))
+            adapters::analyse(&path, &source).map_err(|e| format!("{path}: {e}"))
         })
         .collect::<Result<Vec<_>, _>>()?;
     report::print_table(&analysed, &options);

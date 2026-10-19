@@ -6,6 +6,7 @@ pub mod python;
 pub mod rust;
 pub mod typescript;
 
+use crate::metrics::FileMetrics;
 pub use base::Adapter;
 
 /// Select the language adapter from a source path.
@@ -20,4 +21,16 @@ pub fn for_path(path: &str) -> Result<Box<dyn Adapter>, String> {
         Some(extension) => Err(format!("unsupported language: .{extension}")),
         None => Err("cannot determine language: file has no extension".to_owned()),
     }
+}
+
+/// Measures one source file, warning when only part of it could be parsed.
+pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
+    let metrics = for_path(path)?.analyse(path, source)?;
+    if metrics.parse_errors > 0 {
+        eprintln!(
+            "warning: {path}: {} syntax errors; measured the recoverable code",
+            metrics.parse_errors
+        );
+    }
+    Ok(metrics)
 }

@@ -82,15 +82,14 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
 }
 
 #[test]
-fn scoring_reports_invalid_source_and_empty_projects() {
+fn scoring_rejects_empty_projects_and_measures_invalid_source() {
     let project = Project::new();
     assert!(!project.run("score").status.success());
     project.write("invalid.tsx", "const broken = <;");
     let output = project.run("score");
-    assert!(!output.status.success());
-    assert!(String::from_utf8(output.stderr)
-        .unwrap()
-        .contains("parse error"));
+    assert!(output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("invalid.tsx") && stderr.contains("syntax errors"));
 }
 
 #[test]

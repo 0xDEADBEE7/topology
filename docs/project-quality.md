@@ -17,9 +17,11 @@ Scoring and extraction share deterministic source discovery. Hidden entries,
 dependency folders (`node_modules`, `vendor`), build folders (`target`, `dist`,
 `build`, `bin`), and `coverage` are excluded. Symbolic links are not followed.
 Explicitly named directories are scanned even if their name is normally excluded.
-Scoring fails on unreadable or invalid supported source and on empty inputs.
-Extraction retains its existing best-effort behavior and reports parse errors
-on stderr while emitting records for the other files.
+TypeScript with syntax errors is measured from tree-sitter's recovered tree; a
+warning names the file and its error count, and extraction records it as
+`parse_errors`. Scoring fails on unreadable source, on Rust that `syn` cannot
+parse, and on empty inputs. Extraction skips such files with a message on stderr
+while emitting records for the other files.
 
 Relative imports resolve existing TypeScript files and directory indexes,
 including TSX. Package imports and tsconfig aliases remain unresolved. This is

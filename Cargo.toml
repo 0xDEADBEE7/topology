@@ -2,6 +2,7 @@
 name = "topology"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.90"
 
 [[bin]]
 name = "topo"
@@ -10,8 +11,8 @@ path = "src/main.rs"
 [dependencies]
 syn                 = { version = "2", features = ["full", "visit"] }
 proc-macro2         = { version = "1", features = ["span-locations"] }
-tree-sitter-typescript = "0.20"
-tree-sitter          = "0.20"
+tree-sitter-typescript = "0.23.2"
+tree-sitter          = "0.25.10"
 serde               = { version = "1", features = ["derive"] }
 serde_json          = "1"
 

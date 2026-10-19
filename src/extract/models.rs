@@ -80,4 +80,5 @@ pub(super) struct Metrics {
     pub(super) cognitive: u32,
     pub(super) halstead: f64,
     pub(super) nmi: f64,
+    pub(super) parse_errors: usize,
 }

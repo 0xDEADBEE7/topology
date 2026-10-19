@@ -21,12 +21,49 @@ fn parses_typescript_functions_and_decisions() {
 }
 
 #[test]
-fn rejects_invalid_typescript() {
-    let error = match TypeScriptAdapter.analyse("invalid.ts", "function broken( {") {
-        Ok(_) => panic!("invalid source should fail"),
-        Err(error) => error,
-    };
-    assert!(error.contains("parse error"));
+fn measures_recoverable_typescript() {
+    let metrics = TypeScriptAdapter
+        .analyse("invalid.ts", "function broken( {")
+        .unwrap();
+    assert!(metrics.parse_errors > 0);
+}
+
+/// Syntax the TypeScript grammar still rejects, with the function each file must keep.
+const PARTIAL: [(&str, &str, &str); 5] = [
+    (
+        "generic-import.ts",
+        "export async function load() { return await mocked<typeof import(\"./m\")>(); }",
+        "load",
+    ),
+    (
+        "call-signatures.ts",
+        "type Store = {\n  (): number\n  <U>(selector: U): U\n};\nexport function create() {}",
+        "create",
+    ),
+    (
+        "jsx-entity.tsx",
+        "export function Search() { return <a href=\"?a=1&b=2\">search</a>; }",
+        "Search",
+    ),
+    (
+        "anonymous-default.d.ts",
+        "declare module \"m\" {\n  export default function (): null;\n}\nexport function helper() {}",
+        "helper",
+    ),
+    (
+        "nul-template.ts",
+        "export function separator() { return `a\0b`; }",
+        "separator",
+    ),
+];
+
+#[test]
+fn partially_parsed_files_keep_their_functions() {
+    for (path, source, name) in PARTIAL {
+        let metrics = TypeScriptAdapter.analyse(path, source).unwrap();
+        assert!(metrics.parse_errors > 0, "{path} parses now; drop it");
+        assert!(metrics.fns.iter().any(|f| f.name == name), "{path}");
+    }
 }
 
 #[test]
@@ -72,12 +109,15 @@ fn hooks_and_methods_are_assessed() {
 
 #[test]
 fn selects_grammar_by_extension() {
-    assert!(TypeScriptAdapter
-        .analyse("generic.ts", "const id = <T>(x: T) => x;")
-        .is_ok());
-    assert!(TypeScriptAdapter
-        .analyse("broken.tsx", "const App = () => <div>;")
-        .is_err());
+    let assertion = "const text = <string>value;";
+    let errors = |path| {
+        TypeScriptAdapter
+            .analyse(path, assertion)
+            .unwrap()
+            .parse_errors
+    };
+    assert_eq!(errors("assertion.ts"), 0);
+    assert!(errors("assertion.tsx") > 0);
     for extension in ["ts", "tsx", "mts", "cts"] {
         let path = format!("module.{extension}");
         assert_eq!(

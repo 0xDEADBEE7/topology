@@ -33,6 +33,8 @@ pub struct FileMetrics {
     pub halstead: f64,
     pub nmi: f64,
     pub has_docstring: bool,
+    /// Counts syntax-error nodes; nonzero means only the recoverable code was measured.
+    pub parse_errors: usize,
     pub fns: Vec<FnMetrics>,
     pub classes: Vec<ClassMetrics>,
 }
@@ -105,6 +107,7 @@ pub fn aggregate(
         halstead,
         nmi,
         has_docstring: file_has_docstring,
+        parse_errors: 0,
         fns,
         classes,
     }

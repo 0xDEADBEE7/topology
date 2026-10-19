@@ -19,8 +19,7 @@ pub(super) fn records(
         .to_string_lossy()
         .to_string();
     let relative = relative.strip_prefix("./").unwrap_or(&relative).to_owned();
-    let adapter = crate::adapters::for_path(path.to_string_lossy().as_ref())?;
-    let analysed = adapter.analyse(&relative, &source)?;
+    let analysed = crate::adapters::analyse(&relative, &source)?;
     let language = analysed.language;
     let imports = imports::imports(root, repo, &relative, language, &source);
     let import_ids = imports.iter().map(|import| import.id.clone()).collect();
@@ -94,6 +93,7 @@ fn file_record(
             cognitive: analysed.cognitive,
             halstead: analysed.halstead,
             nmi: analysed.nmi,
+            parse_errors: analysed.parse_errors,
         },
     }
 }
