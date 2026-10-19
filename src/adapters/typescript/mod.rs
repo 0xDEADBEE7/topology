@@ -4,6 +4,7 @@ use super::Adapter;
 use crate::metrics;
 use declarations::{collect_declarations, has_file_docstring};
 use tree_sitter::{Node, Parser};
+use tree_sitter_typescript::{LANGUAGE_TSX, LANGUAGE_TYPESCRIPT};
 mod counts;
 mod declarations;
 mod syntax;
@@ -22,11 +23,9 @@ impl Adapter for TypeScriptAdapter {
     fn analyse(&self, path: &str, source: &str) -> Result<metrics::FileMetrics, String> {
         let extension = std::path::Path::new(path).extension();
         let (language, grammar) = match extension.and_then(|ext| ext.to_str()) {
-            Some("ts" | "mts" | "cts") => {
-                (self.language(), tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
-            }
-            Some("tsx") => (self.language(), tree_sitter_typescript::LANGUAGE_TSX),
-            _ => ("javascript", tree_sitter_typescript::LANGUAGE_TSX),
+            Some("ts" | "mts" | "cts") => (self.language(), LANGUAGE_TYPESCRIPT),
+            Some("tsx") => (self.language(), LANGUAGE_TSX),
+            _ => ("javascript", LANGUAGE_TSX),
         };
         let mut parser = Parser::new();
         parser

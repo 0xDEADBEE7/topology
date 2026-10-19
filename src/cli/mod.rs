@@ -9,7 +9,7 @@ pub fn usage() -> String {
     "usage: topo [--full-docstring] <path|path::symbol>\n       topo find <symbol>\n       topo score [--guide] [--detail] [--metrics LIST] [--no-colour] <file> [...]\n       topo extract <dir>".to_owned()
 }
 
-/// Scores supported project sources and propagates read or parse failures.
+/// Scores supported project sources, skipping files that cannot be read or parsed.
 pub fn score(args: &[String]) -> Result<(), String> {
     let (options, inputs) = options::parse(args)?;
     let mut files = Vec::new();

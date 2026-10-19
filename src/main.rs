@@ -11,26 +11,22 @@ mod tree;
 mod visit;
 mod visitor;
 
+#[cfg(unix)]
+extern "C" {
+    fn signal(signum: i32, handler: usize) -> usize;
+}
+
 /// Reports command failures with a nonzero exit status.
 fn main() {
-    reset_sigpipe();
+    // SAFETY: restores the default action (SIG_DFL) for SIGPIPE (13) before any output,
+    // so a closed pipe such as `topo extract . | head` ends the process quietly.
+    #[cfg(unix)]
+    unsafe {
+        signal(13, 0);
+    }
     if let Err(error) = run(std::env::args().skip(1).collect()) {
         eprintln!("error: {error}");
         std::process::exit(1);
-    }
-}
-
-/// Lets a closed output pipe end the process quietly, as with `topo extract . | head`.
-fn reset_sigpipe() {
-    #[cfg(unix)]
-    {
-        extern "C" {
-            fn signal(signum: i32, handler: usize) -> usize;
-        }
-        // SAFETY: restores the default action (SIG_DFL) for SIGPIPE (13) before any output.
-        unsafe {
-            signal(13, 0);
-        }
     }
 }
 

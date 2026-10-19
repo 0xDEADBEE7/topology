@@ -53,6 +53,11 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
         "/** A greeting card. */\nexport const Card = () => <div />;",
     );
     project.write("src/config.mts", "export const config = () => true;");
+    project.write(
+        "src/menu.jsx",
+        "export function Menu() { return <a>{ok && <b />}</a>; }",
+    );
+    project.write("src/legacy.cjs", "export const legacy = () => 1;");
     for directory in ["node_modules", "dist", "coverage", ".next"] {
         project.write(&format!("{directory}/invalid.tsx"), "const broken = <;");
     }
@@ -78,8 +83,17 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
             .iter()
             .filter(|record| record["type"] == "file")
             .count(),
-        4
+        6
     );
+    for (name, language, cc) in [
+        ("config", "typescript", 1),
+        ("Menu", "javascript", 2),
+        ("legacy", "javascript", 1),
+    ] {
+        assert!(records.iter().any(|record| record["name"] == name
+            && record["language"] == language
+            && record["metrics"]["cc"] == cc));
+    }
     let resolved = |source: &str| {
         records
             .iter()

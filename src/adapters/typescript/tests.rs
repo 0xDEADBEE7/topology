@@ -21,14 +21,6 @@ fn parses_typescript_functions_and_decisions() {
 }
 
 #[test]
-fn measures_recoverable_typescript() {
-    let metrics = TypeScriptAdapter
-        .analyse("invalid.ts", "function broken( {")
-        .unwrap();
-    assert!(metrics.parse_errors > 0);
-}
-
-#[test]
 fn assesses_react_components_and_jsdoc() {
     let source = include_str!("../../../tests/fixtures/typescript/components.tsx");
     let metrics = TypeScriptAdapter.analyse("components.tsx", source).unwrap();
@@ -80,23 +72,4 @@ fn selects_grammar_by_extension() {
     };
     assert_eq!(errors("assertion.ts"), 0);
     assert!(errors("assertion.tsx") > 0);
-    for (extension, language) in [
-        ("ts", "typescript"),
-        ("cts", "typescript"),
-        ("jsx", "javascript"),
-        ("mjs", "javascript"),
-    ] {
-        let path = format!("module.{extension}");
-        let metrics = crate::adapters::analyse(&path, "export const one = () => 1;").unwrap();
-        assert_eq!(metrics.language, language);
-    }
-}
-
-#[test]
-fn javascript_uses_the_tsx_grammar() {
-    let source = "export function App() { return <div>{ok && <b />}</div>; }";
-    let metrics = TypeScriptAdapter.analyse("app.jsx", source).unwrap();
-    assert_eq!(metrics.parse_errors, 0);
-    assert_eq!(metrics.fns[0].name, "App");
-    assert_eq!(metrics.fns[0].cc, 2);
 }

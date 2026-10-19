@@ -8,21 +8,12 @@ pub fn file_outline(path: &str) -> Result<(Option<String>, Vec<SymbolInfo>), Str
     let root = fs::canonicalize(".").map_err(|e| e.to_string())?;
     let path = fs::canonicalize(path).map_err(|e| format!("{path}: {e}"))?;
     let values = records::records(&root, &repo_name(&root), &path)?;
-    let description = values.iter().find_map(|value| {
-        (value.get("type")?.as_str()? == "file")
-            .then(|| {
-                value
-                    .get("description")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_owned)
-            })
-            .flatten()
-    });
+    let description = values[0]["description"].as_str().map(str::to_owned);
     let symbols = values
         .iter()
         .filter(|value| {
             matches!(
-                value.get("type").and_then(|v| v.as_str()),
+                value["type"].as_str(),
                 Some("function" | "class" | "struct")
             )
         })

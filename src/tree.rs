@@ -21,40 +21,25 @@ fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
         .and_then(|n| n.to_str())
         .unwrap_or(root);
     let entries = tree_entries(root, files);
-    let max_prefix = align_width(entries.iter().enumerate().map(|(index, entry)| {
-        render_prefix(index, entry, &entries).chars().count()
-            + entry.parts.last().map_or(0, |name| name.chars().count())
+    let width = align_width(entries.iter().enumerate().map(|(index, (parts, _))| {
+        render_prefix(index, parts, &entries).chars().count()
+            + parts.last().map_or(0, |name| name.chars().count())
     }));
-    if let Some(description) = read_docstring(Path::new(root)) {
-        print_entry(
-            &format!("{root_name}/"),
-            Some(description),
-            max_prefix + 2,
-            full_docstring,
-        );
-    } else {
-        println!("{root_name}/");
-    }
-    for (index, entry) in entries.iter().enumerate() {
+    let root_doc = read_docstring(Path::new(root));
+    print_entry(&format!("{root_name}/"), root_doc, width, full_docstring);
+    for (index, (parts, description)) in entries.iter().enumerate() {
+        let directory = entries
+            .get(index + 1)
+            .is_some_and(|(next, _)| next.starts_with(parts));
         let prefix = format!(
             "{}{}{}",
-            render_prefix(index, entry, &entries),
-            entry.parts.last().map_or("", String::as_str),
-            if entry.directory { "/" } else { "" }
+            render_prefix(index, parts, &entries),
+            parts.last().map_or("", String::as_str),
+            if directory { "/" } else { "" }
         );
-        print_entry(
-            &prefix,
-            entry.description.clone(),
-            max_prefix + 2,
-            full_docstring,
-        );
+        print_entry(&prefix, description.clone(), width, full_docstring);
     }
     Ok(())
-}
-
-/// Reads the description attached to a containing directory.
-fn directory_doc(root: &str, parts: &[String]) -> Option<String> {
-    read_docstring(&Path::new(root).join(parts.join("/")))
 }
 
 fn read_docstring(directory: &Path) -> Option<String> {
@@ -89,7 +74,7 @@ fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
 
 /// Picks the description column, ignoring entries too long to align with the rest.
 fn align_width(widths: impl Iterator<Item = usize>) -> usize {
-    widths.filter(|width| *width <= 40).max().unwrap_or(0)
+    widths.filter(|width| *width <= 40).max().unwrap_or(0) + 2
 }
 
 /// Displays the source of a declaration found in the named file only.
@@ -138,22 +123,14 @@ fn print_entry(
 }
 
 fn truncate_right(text: &str, width: usize) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    if chars.len() <= width {
+    if text.chars().count() <= width {
         return text.to_owned();
     }
-    if width <= 3 {
-        return "…".repeat(width);
-    }
-    chars[..width - 3].iter().collect::<String>() + "..."
+    text.chars().take(width - 3).collect::<String>() + "..."
 }
 
-#[derive(Debug)]
-struct Entry {
-    parts: Vec<String>,
-    description: Option<String>,
-    directory: bool,
-}
+/// Path components and description of one file or directory.
+type Entry = (Vec<String>, Option<String>);
 
 /// Builds one entry per source file and containing directory, ordered by path components.
 fn tree_entries(root: &str, files: Vec<(String, Option<String>)>) -> Vec<Entry> {
@@ -161,43 +138,27 @@ fn tree_entries(root: &str, files: Vec<(String, Option<String>)>) -> Vec<Entry> 
     for (path, description) in files {
         let parts: Vec<String> = path.split('/').map(str::to_owned).collect();
         for index in 1..parts.len() {
+            let directory = &parts[..index];
             descriptions
-                .entry(parts[..index].to_vec())
-                .or_insert_with(|| directory_doc(root, &parts[..index]));
+                .entry(directory.to_vec())
+                .or_insert_with(|| read_docstring(&Path::new(root).join(directory.join("/"))));
         }
         descriptions.insert(parts, description);
     }
-    let paths: Vec<_> = descriptions.into_iter().collect();
-    let directories: Vec<bool> = paths
-        .windows(2)
-        .map(|pair| pair[1].0.starts_with(&pair[0].0))
-        .chain([false])
-        .collect();
-    paths
-        .into_iter()
-        .zip(directories)
-        .map(|((parts, description), directory)| Entry {
-            parts,
-            description,
-            directory,
-        })
-        .collect()
+    descriptions.into_iter().collect()
 }
 
 /// Renders branch connectors based on later siblings.
-fn render_prefix(index: usize, entry: &Entry, entries: &[Entry]) -> String {
-    let parent_len = entry.parts.len().saturating_sub(1);
+fn render_prefix(index: usize, parts: &[String], entries: &[Entry]) -> String {
     let mut prefix = String::new();
-    for depth in 0..parent_len {
-        prefix.push_str(
-            if has_later_branch(index, &entry.parts[..=depth], entries) {
-                "│  "
-            } else {
-                "   "
-            },
-        );
+    for depth in 1..parts.len() {
+        prefix.push_str(if has_later_sibling(index, &parts[..depth], entries) {
+            "│  "
+        } else {
+            "   "
+        });
     }
-    prefix.push_str(if has_later_branch(index, &entry.parts, entries) {
+    prefix.push_str(if has_later_sibling(index, parts, entries) {
         "├─ "
     } else {
         "└─ "
@@ -205,11 +166,9 @@ fn render_prefix(index: usize, entry: &Entry, entries: &[Entry]) -> String {
     prefix
 }
 
-fn has_later_branch(index: usize, path: &[String], entries: &[Entry]) -> bool {
-    entries[index + 1..].iter().any(|candidate| {
-        candidate.parts.len() > path.len().saturating_sub(1)
-            && candidate.parts[..path.len().saturating_sub(1)]
-                == path[..path.len().saturating_sub(1)]
-            && candidate.parts.get(path.len().saturating_sub(1)) != path.last()
+fn has_later_sibling(index: usize, path: &[String], entries: &[Entry]) -> bool {
+    let (name, parent) = path.split_last().expect("paths have a final component");
+    entries[index + 1..].iter().any(|(parts, _)| {
+        parts.starts_with(parent) && parts.get(parent.len()).is_some_and(|next| next != name)
     })
 }

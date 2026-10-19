@@ -85,14 +85,9 @@ fn summary(text: &[&str]) -> Option<String> {
         .find(|paragraph| !paragraph.is_empty() && !is_heading(paragraph))?
         .join(" ");
     let lower = summary.to_ascii_lowercase();
-    let license = [
-        "copyright",
-        "spdx-license-identifier",
-        "@license",
-        "licensed under",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker));
+    let license = ["copyright", "spdx-license", "@license", "licensed under"]
+        .iter()
+        .any(|marker| lower.contains(marker));
     (!license && !summary.starts_with('@')).then_some(summary)
 }
 
