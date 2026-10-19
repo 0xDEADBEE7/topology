@@ -58,7 +58,7 @@ their function.
 Cognitive complexity follows SonarSource 1.7 in every language: `if`, loops,
 `switch`/`match`, `catch`/`except` and ternaries add 1 plus nesting (a `switch`
 counts once), `else`/`else if`/`elif` add 1 without nesting, each run of like
-`&&`/`||`/`and`/`or` adds 1, `??`, `?.` and Rust `?` add nothing, labelled jumps add
+`&&`/`||`/`and`/`or` adds 1 (Rust let chains included), `??`, `?.` and Rust `?` add nothing, labelled jumps add
 1, and folded callbacks nest their bodies. Deviations: recursion is not counted,
 named nested functions are their own units, JavaScript's "declarative outer
 function" exemption is not applied, and Rust macro bodies are not measured.

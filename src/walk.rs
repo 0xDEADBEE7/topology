@@ -166,7 +166,7 @@ impl Walker<'_> {
             && node.named_child_count() == 1
             && node
                 .named_child(0)
-                .is_some_and(|child| child.kind() == "string")
+                .is_some_and(|child| matches!(child.kind(), "string" | "concatenated_string"))
     }
 
     /// Finds a doc comment or attribute above the declaration, or a docstring opening the body.
@@ -181,9 +181,11 @@ impl Walker<'_> {
         let mut sibling = declaration.prev_named_sibling();
         while let Some(node) = sibling {
             let text = node.utf8_text(self.source).unwrap_or_default();
-            if self.spec.docs.iter().any(|doc| text.starts_with(doc))
-                && !text.starts_with("#[doc(hidden")
-            {
+            let doc = |prefix: &&str| {
+                let rest = text.strip_prefix(*prefix);
+                rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
+            };
+            if self.spec.docs.iter().any(doc) && !text.starts_with("#[doc(hidden") {
                 return true;
             }
             if !self.spec.attributes.contains(&node.kind()) {
@@ -445,7 +447,11 @@ impl Walker<'_> {
         }
     }
 
+    /// The operator of a logical expression; a Rust let chain is a run of `&&`.
     fn logical_operator(&self, node: Node<'_>) -> Option<&'static str> {
+        if node.kind() == "let_chain" {
+            return Some("&&");
+        }
         let operator = node.child_by_field_name("operator")?.kind();
         self.spec.logical.contains(&operator).then_some(operator)
     }

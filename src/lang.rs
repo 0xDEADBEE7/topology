@@ -86,7 +86,8 @@ pub struct Spec {
     /// Prefixes of comments or attributes documenting the declaration below them; when
     /// empty, a string opening the body documents it and bare strings are not code.
     pub docs: &'static [&'static str],
-    /// Nodes that may sit between a documentation comment and its declaration.
+    /// Nodes that may sit between a documentation comment and its declaration, such as Rust
+    /// attributes and plain comments.
     pub attributes: &'static [&'static str],
     /// Expressions a binding sees through to reach the function it names.
     pub wrappers: &'static [&'static str],
@@ -177,7 +178,7 @@ const RUST: Spec = Spec {
     logical: &["&&", "||"],
     comments: &["line_comment", "block_comment"],
     docs: &["///", "/**", "#[doc"],
-    attributes: &["attribute_item"],
+    attributes: &["attribute_item", "line_comment", "block_comment"],
     wrappers: &[],
     wrapper_calls: &[],
     bindings: &[],

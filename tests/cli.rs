@@ -135,9 +135,11 @@ fn rust_and_python_semantics_name_and_rate_functions() {
             ("new", 3, 0),
             ("usage", 5, 0),
             ("Shape::area", 3, 0),
+            ("count_down", 6, 6),
         ],
     );
-    assert_eq!(documented(path), ["sum_of_primes", "Shape::new"]);
+    let docs = documented(path);
+    assert_eq!(docs, ["sum_of_primes", "Shape::new", "count_down"]);
     assert!(topo(&[&format!("{path}::Shape::new")]).contains("pub fn new() -> Self {"));
     assert!(topo(&[&format!("{path}::new")]).contains("fn new() -> Shape {"));
     assert!(topo(&[&format!("{path}::Shape::area")]).contains("fn area(&self) -> u32 {"));
@@ -152,9 +154,10 @@ fn rust_and_python_semantics_name_and_rate_functions() {
             ("page", 6, 0),
             ("Popen._execute_child", 2, 0),
             ("Popen.Inner.deep", 2, 0),
+            ("fetch", 2, 0),
         ],
     );
-    assert_eq!(documented(path), ["sum_of_primes", "Shape.area"]);
+    assert_eq!(documented(path), ["sum_of_primes", "Shape.area", "fetch"]);
     assert!(topo(&[&format!("{path}::Shape.area")]).contains("def area(self):"));
     assert!(topo(&[&format!("{path}::Popen.Inner.deep")]).contains("def deep(self):"));
 }

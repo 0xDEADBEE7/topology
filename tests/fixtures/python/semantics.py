@@ -68,3 +68,8 @@ class Popen:
     class Inner:
         def deep(self):
             return 3
+
+
+def fetch():
+    "Fetches " "the page."
+    return 1

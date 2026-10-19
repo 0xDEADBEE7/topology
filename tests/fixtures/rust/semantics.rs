@@ -79,3 +79,15 @@ impl Area for &'static Shape {
         1
     }
 }
+
+/// Counts down while a value remains.
+#[allow(dead_code)] // kept for the example
+fn count_down(mut a: Option<u32>, b: bool, c: bool) -> u32 {
+    while let Some(x) = a && b {
+        a = x.checked_sub(1);
+    }
+    if let Some(x) = a && b && (c || b) { x } else { 0 }
+}
+
+//// A plain comment, not documentation.
+fn banner() {}
