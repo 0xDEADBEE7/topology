@@ -118,11 +118,23 @@ fn selects_grammar_by_extension() {
     };
     assert_eq!(errors("assertion.ts"), 0);
     assert!(errors("assertion.tsx") > 0);
-    for extension in ["ts", "tsx", "mts", "cts"] {
+    for (extension, language) in [
+        ("ts", "typescript"),
+        ("cts", "typescript"),
+        ("jsx", "javascript"),
+        ("mjs", "javascript"),
+    ] {
         let path = format!("module.{extension}");
-        assert_eq!(
-            crate::adapters::for_path(&path).unwrap().language(),
-            "typescript"
-        );
+        let metrics = crate::adapters::analyse(&path, "export const one = () => 1;").unwrap();
+        assert_eq!(metrics.language, language);
     }
+}
+
+#[test]
+fn javascript_uses_the_tsx_grammar() {
+    let source = "export function App() { return <div>{ok && <b />}</div>; }";
+    let metrics = TypeScriptAdapter.analyse("app.jsx", source).unwrap();
+    assert_eq!(metrics.parse_errors, 0);
+    assert_eq!(metrics.fns[0].name, "App");
+    assert_eq!(metrics.fns[0].cc, 2);
 }

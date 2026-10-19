@@ -9,6 +9,9 @@ pub mod typescript;
 use crate::metrics::FileMetrics;
 pub use base::Adapter;
 
+/// Extensions measured with the TypeScript grammars; JavaScript reuses TSX.
+pub const ECMA_EXTENSIONS: [&str; 8] = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+
 /// Select the language adapter from a source path.
 pub fn for_path(path: &str) -> Result<Box<dyn Adapter>, String> {
     match std::path::Path::new(path)
@@ -17,7 +20,9 @@ pub fn for_path(path: &str) -> Result<Box<dyn Adapter>, String> {
     {
         Some("rs") => Ok(Box::new(rust::RustAdapter)),
         Some("py") => Ok(Box::new(python::PythonAdapter)),
-        Some("ts" | "tsx" | "mts" | "cts") => Ok(Box::new(typescript::TypeScriptAdapter)),
+        Some(extension) if ECMA_EXTENSIONS.contains(&extension) => {
+            Ok(Box::new(typescript::TypeScriptAdapter))
+        }
         Some(extension) => Err(format!("unsupported language: .{extension}")),
         None => Err("cannot determine language: file has no extension".to_owned()),
     }

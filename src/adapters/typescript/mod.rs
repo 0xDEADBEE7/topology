@@ -18,15 +18,15 @@ impl Adapter for TypeScriptAdapter {
         "typescript"
     }
 
-    /// Analyse TypeScript declarations and function bodies with tree-sitter.
+    /// Analyse TypeScript and JavaScript declarations and function bodies with tree-sitter.
     fn analyse(&self, path: &str, source: &str) -> Result<metrics::FileMetrics, String> {
-        let grammar = if std::path::Path::new(path)
-            .extension()
-            .is_some_and(|ext| ext == "tsx")
-        {
-            tree_sitter_typescript::LANGUAGE_TSX
-        } else {
-            tree_sitter_typescript::LANGUAGE_TYPESCRIPT
+        let extension = std::path::Path::new(path).extension();
+        let (language, grammar) = match extension.and_then(|ext| ext.to_str()) {
+            Some("ts" | "mts" | "cts") => {
+                (self.language(), tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
+            }
+            Some("tsx") => (self.language(), tree_sitter_typescript::LANGUAGE_TSX),
+            _ => ("javascript", tree_sitter_typescript::LANGUAGE_TSX),
         };
         let mut parser = Parser::new();
         parser
@@ -42,7 +42,7 @@ impl Adapter for TypeScriptAdapter {
         collect_declarations(root, source.as_bytes(), &mut raw, &mut classes);
         let functions = raw.iter().map(metrics::compute).collect();
         let mut file = metrics::aggregate(
-            self.language(),
+            language,
             path,
             &raw,
             functions,

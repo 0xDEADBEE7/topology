@@ -32,8 +32,10 @@ pub(super) fn resolve_import(
             .join(source);
         let base = root.join(base);
         let mut candidates = vec![base.clone()];
-        for extension in ["ts", "tsx", "mts", "cts"] {
-            candidates.push(base.with_extension(extension));
+        for extension in crate::adapters::ECMA_EXTENSIONS {
+            let mut file = base.clone().into_os_string();
+            file.push(format!(".{extension}"));
+            candidates.push(file.into());
             candidates.push(base.join(format!("index.{extension}")));
         }
         candidates

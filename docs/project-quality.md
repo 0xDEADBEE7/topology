@@ -1,6 +1,6 @@
 # Project assessment
 
-Assess TypeScript projects, including React components, with:
+Assess TypeScript and JavaScript projects, including React components, with:
 
 ```bash
 cargo run --quiet -- score /path/to/project/src --detail --all-metrics --no-colour
@@ -8,8 +8,9 @@ cargo run --quiet -- /path/to/project/src/App.tsx
 cargo run --quiet -- extract /path/to/project
 ```
 
-Supported extensions are `.rs`, `.py`, `.ts`, `.tsx`, `.mts`, and `.cts`.
-TypeScript and TSX use separate grammars. React components, hooks, callbacks,
+Supported extensions are `.rs`, `.py`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
+`.jsx`, `.mjs`, and `.cjs`. TypeScript and TSX use separate grammars; JavaScript
+uses the TSX grammar. React components, hooks, callbacks,
 and class methods participate in the shared complexity reports. Assessment
 does not require installing or executing the target project's dependencies.
 
@@ -23,8 +24,8 @@ warning names the file and its error count, and extraction records it as
 parse, and on empty inputs. Extraction skips such files with a message on stderr
 while emitting records for the other files.
 
-Relative imports resolve existing TypeScript files and directory indexes,
-including TSX. Package imports and tsconfig aliases remain unresolved. This is
+Relative imports resolve existing TypeScript and JavaScript files and directory
+indexes. Package imports and tsconfig aliases remain unresolved. This is
 a structural assessment, not TypeScript type checking or React hook-rule linting.
 The Python fallback and Halstead token counts remain approximate.
 

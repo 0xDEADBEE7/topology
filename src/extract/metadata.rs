@@ -5,6 +5,7 @@ pub(super) use super::{
     documentation::docstring,
     resolution::resolve_import,
 };
+use crate::adapters::ECMA_EXTENSIONS;
 
 /// Normalize an adapter language identifier for serialized output.
 pub(super) fn language_name(language: &str) -> &'static str {
@@ -19,13 +20,11 @@ pub(super) fn language_name(language: &str) -> &'static str {
 
 /// Remove a supported source extension from a relative module path.
 pub(super) fn module_path(path: &str) -> &str {
-    path.strip_suffix(".rs")
-        .or_else(|| path.strip_suffix(".py"))
-        .or_else(|| path.strip_suffix(".ts"))
-        .or_else(|| path.strip_suffix(".tsx"))
-        .or_else(|| path.strip_suffix(".mts"))
-        .or_else(|| path.strip_suffix(".cts"))
-        .unwrap_or(path)
+    match path.rsplit_once('.') {
+        Some((stem, "rs" | "py")) => stem,
+        Some((stem, extension)) if ECMA_EXTENSIONS.contains(&extension) => stem,
+        _ => path,
+    }
 }
 
 /// Build the stable symbol identifier used by extraction consumers.
