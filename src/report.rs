@@ -1,8 +1,8 @@
 //! Rates functions against the metric bands and prints score tables and the guide.
 
 use crate::{
-    metrics::{FileInfo, Unit},
     table::{self, GREEN, RED, YELLOW},
+    walk::{FileInfo, Unit},
 };
 use std::io::IsTerminal;
 

@@ -2,7 +2,7 @@
 
 use crate::{
     lang::{Language, EXTENSIONS},
-    metrics::{FileInfo, Import, Unit},
+    walk::{FileInfo, Import, Unit},
 };
 use serde_json::{json, Value};
 use std::{

@@ -1,6 +1,6 @@
 //! Renders repository, file, and symbol topology, and finds declarations by name.
 
-use crate::metrics::{FileInfo, Unit};
+use crate::walk::{FileInfo, Unit};
 use std::{cmp::Reverse, collections::BTreeMap, fs, path::Path};
 
 /// Displays repository, file, or symbol detail according to the target path, returning

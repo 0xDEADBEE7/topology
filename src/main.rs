@@ -2,7 +2,6 @@
 
 mod extract;
 mod lang;
-mod metrics;
 mod paths;
 mod report;
 mod syntax;

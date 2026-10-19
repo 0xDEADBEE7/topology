@@ -1,6 +1,6 @@
 //! Discovers and analyses supported source files, excluding dependencies and build output.
 
-use crate::{lang::Language, metrics::FileInfo};
+use crate::{lang::Language, walk::FileInfo};
 use std::{
     fs,
     path::{Path, PathBuf},

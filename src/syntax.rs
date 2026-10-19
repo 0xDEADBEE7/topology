@@ -1,7 +1,7 @@
 //! Reads what the syntax tree says about declarations and files: docs, headers, exports
 //! and imports.
 
-use crate::{lang::Spec, metrics::Import};
+use crate::{lang::Spec, walk::Import};
 use tree_sitter::Node;
 
 /// Recognizes a bare string statement, which documents rather than computes.
