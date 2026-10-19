@@ -15,3 +15,7 @@ class Shape:
     def area(self):
         '''Measures it.'''
         return 1
+
+
+def config():
+    """/etc/topo.toml is read first."""

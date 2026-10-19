@@ -154,6 +154,11 @@ fn extract_reads_imports_from_syntax_and_resolves_relative_ones() {
         "lib.rs",
         "use a::{b, c as d, e::{self, /* c */ f}, g::*};\n",
     );
+    project.write("pkg/b.py", "");
+    project.write("pkg/b/__init__.py", "");
+    project.write("pkg/a.py", "from .b import c\n");
+    project.write("open.ts", "import x from \"./ab\n;\nexport * from \"\n;\n");
+    project.write("ab.ts", "");
     let records: Vec<serde_json::Value> = String::from_utf8(project.run("extract").stdout)
         .unwrap()
         .lines()
@@ -196,6 +201,12 @@ fn extract_reads_imports_from_syntax_and_resolves_relative_ones() {
     let rust = ["a::b", "a::c", "a::e", "a::e::f", "a::g::*"];
     let rust = rust.map(|source| format!("1 {source} null null"));
     assert_eq!(imports("lib.rs"), rust);
+    let package = ["1 .b \"c\" \"pkg/b/__init__.py\""];
+    assert_eq!(imports("pkg/a.py"), package, "a package shadows its module");
+    assert!(
+        imports("open.ts").is_empty(),
+        "unterminated specifiers are skipped"
+    );
 }
 
 #[test]

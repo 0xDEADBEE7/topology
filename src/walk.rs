@@ -202,12 +202,7 @@ impl Walker<'_> {
         if current.kind() == "export_statement" {
             return Some("default".to_owned());
         }
-        let (_, field) = self
-            .spec
-            .bindings
-            .iter()
-            .find(|(kind, _)| *kind == current.kind())?;
-        let name = current.child_by_field_name(field)?;
+        let name = current.child_by_field_name(self.binding(current)?)?;
         let name = self.text(name.child_by_field_name("property").unwrap_or(name))?;
         let name = name.trim_matches(['"', '\'']);
         let simple = !name.is_empty() && !name.contains(['{', '[', ' ']);
@@ -270,8 +265,8 @@ impl Walker<'_> {
                 .any(|a| self.spec.functions.contains(&a.kind()) || a.kind() == "call_expression")
     }
 
-    /// Prefixes a member with its containers up to the nearest function, as in `View.render`,
-    /// `Type::method` or `Outer.Inner.method`.
+    /// Prefixes a member with its containers up to the nearest function or detached
+    /// expression, as in `View.render`, `Type::method` or `Outer.Inner.method`.
     fn qualify(&self, member: Node<'_>, name: String) -> String {
         match self.scope(member) {
             Some(scope) => format!("{scope}{}{name}", self.spec.separator),
@@ -279,7 +274,8 @@ impl Walker<'_> {
         }
     }
 
-    /// Names the class, impl or trait holding a member, unless a function holds it first.
+    /// Names the class, impl or trait holding a member, unless a function or a detached
+    /// expression (an object, decorator, heritage clause or static block) holds it first.
     fn scope(&self, member: Node<'_>) -> Option<String> {
         let spec = self.spec;
         let stops = [spec.functions, spec.closures, spec.scopes, spec.detached];
@@ -294,11 +290,6 @@ impl Walker<'_> {
     /// Names a class or container by itself (qualified), its implemented type's own name, or
     /// its binding.
     fn class_name(&self, class: Node<'_>) -> String {
-        let field = |name| {
-            class
-                .child_by_field_name(name)
-                .and_then(|node| self.text(node))
-        };
         let implemented = || {
             let named = std::iter::successors(class.child_by_field_name("type"), |node| {
                 let field = match node.kind() {
@@ -311,7 +302,9 @@ impl Walker<'_> {
             let text = self.text(named.last()?)?;
             Some(text.split_whitespace().collect::<Vec<_>>().join(" "))
         };
-        let own = field("name").or_else(implemented);
+        let own = (class.child_by_field_name("name"))
+            .and_then(|node| self.text(node))
+            .or_else(implemented);
         own.map(|name| self.qualify(class, name))
             .or_else(|| self.bound_name(class, true))
             .unwrap_or_else(|| "<anonymous>".to_owned())
@@ -329,29 +322,32 @@ impl Walker<'_> {
         node
     }
 
-    /// Whether a declaration reaches `parent`: a wrapper, a declaration, the arguments that
-    /// bind `child`, or a call, unless that call is a method whose value is neither bound nor
-    /// declared (so `items.filter(cb)` starts at its arguments but `it.each(table)(cb)` takes
-    /// its table).
+    /// Whether a declaration reaches `parent`: a wrapper, a declaration, a binding, the
+    /// arguments that bind `child`, or a call, unless that call is a method whose value is
+    /// neither bound nor declared (so `items.filter(cb)` starts at its arguments but
+    /// `it.each(table)(cb)` takes its table).
     fn climbs(&self, parent: Node<'_>, child: Node<'_>) -> bool {
-        let kind = parent.kind();
-        let through = self.spec.wrappers.contains(&kind) || self.spec.declarations.contains(&kind);
+        let (spec, kind) = (self.spec, parent.kind());
+        let through = spec.wrappers.contains(&kind) || spec.declarations.contains(&kind);
         let method = parent
             .child_by_field_name("function")
             .is_some_and(|callee| callee.kind() == "member_expression");
-        through
+        (through || self.binding(parent).is_some())
             && match kind {
                 "arguments" => self.passes_arguments(parent, child),
-                "call_expression" if method => parent.parent().is_some_and(|outer| {
-                    let bound = self
-                        .spec
-                        .bindings
-                        .iter()
-                        .any(|(kind, _)| *kind == outer.kind());
-                    bound || self.climbs(outer, parent)
-                }),
+                "call_expression" if method => {
+                    (parent.parent()).is_some_and(|outer| self.climbs(outer, parent))
+                }
                 _ => true,
             }
+    }
+
+    /// The field holding the name a binding node gives, such as a `pair`'s `key`.
+    fn binding(&self, node: Node<'_>) -> Option<&'static str> {
+        let mut bindings = self.spec.bindings.iter();
+        bindings
+            .find(|(kind, _)| *kind == node.kind())
+            .map(|(_, field)| *field)
     }
 
     /// Recognizes calls such as `memo(...)` or `React.forwardRef(...)` that wrap a component.

@@ -6,24 +6,27 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Analyses every supported file under `targets`, naming each relative to `root` and
-/// skipping, with a warning, any that cannot be read.
-pub fn analyse(targets: &[impl AsRef<Path>], root: &Path) -> Result<Vec<FileInfo>, String> {
+/// Analyses every supported file under `targets` as it is iterated, naming each relative to
+/// `root` and skipping, with a warning, any that cannot be read.
+pub fn analyse<'a>(
+    targets: &[impl AsRef<Path>],
+    root: &'a Path,
+) -> Result<impl Iterator<Item = FileInfo> + 'a, String> {
     let mut paths = Vec::new();
     for target in targets {
         collect(target.as_ref(), &mut paths)?;
     }
     paths.sort();
     paths.dedup();
-    let files = paths.iter().filter_map(|path| {
-        let name = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
-        fs::read_to_string(path)
+    let files = paths.into_iter().filter_map(move |path| {
+        let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy();
+        fs::read_to_string(&path)
             .map_err(|e| e.to_string())
             .and_then(|source| crate::walk::analyse(&name, &source))
             .map_err(|e| eprintln!("warning: {name}: skipped: {e}"))
             .ok()
     });
-    Ok(files.collect())
+    Ok(files)
 }
 
 /// Collects source files deterministically without following symbolic links.

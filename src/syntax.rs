@@ -14,11 +14,21 @@ pub fn is_docstring(spec: &Spec, node: Node<'_>) -> bool {
             .is_some_and(|child| matches!(child.kind(), "string" | "concatenated_string"))
 }
 
-/// The outermost node starting on the declaration's row, which a doc comment sits above:
-/// a class field, an object pair or an assignment statement.
+/// The outermost node starting on the declaration's row short of the object, class body or
+/// block holding it, which a doc comment sits above, such as its export or statement.
 pub fn anchor(declaration: Node<'_>) -> Node<'_> {
     let row = declaration.start_position().row;
-    let same_row = |node: &Node<'_>| node.start_position().row == row && node.parent().is_some();
+    let containers = [
+        "object",
+        "class_body",
+        "declaration_list",
+        "statement_block",
+        "block",
+    ];
+    let same_row = |node: &Node<'_>| {
+        let container = containers.contains(&node.kind()) || node.parent().is_none();
+        node.start_position().row == row && !container
+    };
     let outer = std::iter::successors(Some(declaration), |node| node.parent().filter(same_row));
     outer.last().unwrap_or(declaration)
 }
@@ -33,8 +43,9 @@ pub fn signature(source: &str, node: Node<'_>, anchor: Node<'_>) -> String {
     header.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Whether a declaration belongs to its module's interface: `export`, `pub`, or a public
-/// top-level Python name.
+/// Whether a declaration belongs to its module's interface: `export`, a top-level name
+/// that a local `export { }` or `export default` names, `pub`, or a public top-level
+/// Python name.
 pub fn exported(declaration: Node<'_>, name: &str, exports: &[String]) -> bool {
     let mut parent = declaration.parent();
     if parent.is_some_and(|p| p.kind() == "decorated_definition") {
@@ -45,7 +56,7 @@ pub fn exported(declaration: Node<'_>, name: &str, exports: &[String]) -> bool {
             .child(0)
             .is_some_and(|c| c.kind() == "visibility_modifier")
         || parent.is_some_and(|p| p.kind() == "module") && !name.starts_with('_')
-        || exports.iter().any(|export| export == name)
+        || parent.is_some_and(|p| p.kind() == "program") && exports.iter().any(|e| e == name)
 }
 
 /// Names that local `export { a, b as c }` and `export default a` statements expose.
@@ -77,24 +88,25 @@ pub fn doc(spec: &Spec, source: &str, node: Node<'_>, anchor: Node<'_>) -> Optio
     let mut text = String::new();
     let mut sibling = anchor.prev_named_sibling();
     while let Some(node) = sibling {
-        if is_doc(spec, &source[node.byte_range()]) {
+        let doc = is_doc(spec, &source[node.byte_range()]);
+        if doc {
             text.insert_str(0, &doc_text(source, node));
         } else if !text.is_empty() || !spec.attributes.contains(&node.kind()) {
             break;
         }
-        let block = node.kind() == "comment" && !text.is_empty();
+        let block = node.kind() == "comment" && doc;
         sibling = node.prev_named_sibling().filter(|_| !block);
     }
     summary(&text)
 }
 
-/// Recognizes a doc comment or attribute (`///` but not `////`, or `#[doc` but not hidden).
+/// Recognizes a doc comment or attribute (`///` but not `////`, or `#[doc = "…"]`).
 fn is_doc(spec: &Spec, text: &str) -> bool {
     let doc = |prefix: &&str| {
         let rest = text.strip_prefix(*prefix);
         rest.is_some_and(|rest| !rest.starts_with(&prefix[prefix.len() - 1..]))
     };
-    spec.docs.iter().any(doc) && !text.starts_with("#[doc(hidden")
+    spec.docs.iter().any(doc)
 }
 
 /// Summarizes the docstring that opens a Python body or module.
@@ -108,11 +120,8 @@ fn docstring(spec: &Spec, source: &str, body: Node<'_>) -> Option<String> {
 /// Whether a string statement holds an f-string or bytes literal, which Python never
 /// takes as a docstring.
 fn formatted(source: &str, node: Node<'_>) -> bool {
-    let mut cursor = node.walk();
-    let children: Vec<_> = node.named_children(&mut cursor).collect();
-    let prefix = &source[node.byte_range()];
-    node.kind() == "string_start" && prefix.contains(['f', 'F', 'b', 'B'])
-        || (children.into_iter()).any(|child| formatted(source, child))
+    node.kind() == "string_start" && source[node.byte_range()].contains(['f', 'F', 'b', 'B'])
+        || (node.named_children(&mut node.walk())).any(|child| formatted(source, child))
 }
 
 /// Describes a file by its module docstring, or by the doc comments before its first
@@ -163,29 +172,32 @@ fn preamble(node: Node<'_>) -> bool {
     ) || node.kind() == "expression_statement" && first == Some("string")
 }
 
-/// Joins the first paragraph that is prose, up to its tags (`@param`), skipping headings
-/// and comment markers; None when a license comes first.
+/// Joins the first paragraph up to its tags (`@param`), past a reStructuredText title
+/// and comment markers; None when that paragraph is a license or only tags.
 fn summary(text: &str) -> Option<String> {
     let lines: Vec<&str> = text
         .lines()
-        .map(|line| line.trim().trim_start_matches(['/', '*', '!']))
-        .map(|line| line.trim_end_matches("*/").trim())
+        .map(|line| {
+            let line = line.trim();
+            let marker = ["/**/", "/**", "/*!", "* "]
+                .iter()
+                .find_map(|m| line.strip_prefix(m));
+            let line = marker.unwrap_or(if line == "*" { "" } else { line });
+            line.trim_end_matches("*/").trim()
+        })
         .collect();
-    let prose = |paragraph: &[&str]| {
-        let prose = paragraph.iter().take_while(|line| !line.starts_with('@'));
-        prose.copied().collect::<Vec<_>>().join(" ")
-    };
-    let paragraph = lines.split(|line| line.is_empty()).find(|paragraph| {
-        !is_heading(paragraph) && (license(paragraph) || !prose(paragraph).is_empty())
-    })?;
-    (!license(paragraph)).then(|| prose(paragraph))
+    let mut paragraphs = lines.split(|line| line.is_empty());
+    let paragraph = paragraphs.find(|p| !p.is_empty() && !is_heading(p))?;
+    let prose = paragraph.iter().take_while(|line| !line.starts_with('@'));
+    let prose: Vec<&str> = prose.copied().collect();
+    (!license(paragraph) && !prose.is_empty()).then(|| prose.join(" "))
 }
 
 /// Recognizes a license paragraph, which never describes code.
 fn license(paragraph: &[&str]) -> bool {
     let lower = paragraph.join(" ").to_ascii_lowercase();
-    let markers = ["copyright", "spdx-license", "@license", "licensed under"];
-    markers.iter().any(|marker| lower.contains(marker))
+    let markers = ["spdx-license", "@license", "licensed under"];
+    lower.starts_with("copyright") || markers.iter().any(|marker| lower.contains(marker))
 }
 
 /// Recognizes a reStructuredText title: one line of text above an underline.
@@ -205,7 +217,7 @@ pub fn imports(node: Node<'_>, source: &str, list: &mut Vec<Import>) {
         "call_expression" => called(node, source),
         _ => None,
     };
-    if let Some(string) = specifier.filter(|string| string.kind() == "string") {
+    if let Some(string) = specifier.filter(|s| s.kind() == "string" && !s.has_error()) {
         let quoted = &source[string.byte_range()];
         let source = quoted[1..quoted.len() - 1].to_owned();
         list.push(Import {

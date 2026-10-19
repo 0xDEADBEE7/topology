@@ -58,7 +58,7 @@ fn usage() -> String {
 /// Scores supported project sources, skipping files that cannot be read.
 fn score(args: &[String]) -> Result<(), String> {
     let (options, inputs) = parse_score_args(args)?;
-    let analysed = paths::analyse(&inputs, Path::new(""))?;
+    let analysed: Vec<_> = paths::analyse(&inputs, Path::new(""))?.collect();
     if analysed.is_empty() {
         return Err("no supported source files could be analysed".to_owned());
     }

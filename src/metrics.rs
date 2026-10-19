@@ -12,7 +12,8 @@ pub struct Unit {
     pub doc: Option<String>,
     /// Declaration text up to the body, with whitespace collapsed.
     pub signature: String,
-    /// Declared with `export` or `pub`, or a public top-level Python name.
+    /// Declared with `export` or `pub`, named by a local `export { }` or `export default`,
+    /// or a public top-level Python name.
     pub exported: bool,
     /// The class, impl or trait whose name qualifies this one.
     pub parent: Option<String>,

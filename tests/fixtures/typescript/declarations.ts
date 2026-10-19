@@ -43,3 +43,38 @@ export { local };
 export default tagged;
 export { other } from "./other";
 function other() {}
+
+/** Renders the copyright footer. */
+export function footer() {}
+
+/**
+ * @deprecated
+ *
+ * Use add instead.
+ */
+export function legacy() {}
+
+/** A banner that documents nothing below it. */
+// ----------
+/** @internal */
+export function internal() {}
+
+export class Store {
+  /** Handles a click. */
+  @action
+  handle = () => 1;
+  onKey = debounce((event) => event);
+}
+
+export const routes = { home: () => "/", about: () => "/about" };
+
+export const loaders = {
+  /** Loads the user. */
+  user:
+    async (id) => id,
+};
+
+function wrapper() {
+  function local() {}
+  return local;
+}

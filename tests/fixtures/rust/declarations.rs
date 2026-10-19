@@ -21,3 +21,15 @@ impl Holder {
         self.0
     }
 }
+
+/// **Bold** first words.
+#[doc(alias = "fetch")]
+pub fn bold() {}
+
+#[doc(alias = "only_alias")]
+pub fn aliased() {}
+
+pub struct Unit;
+
+/// Implements the unit.
+impl Unit { pub fn new() -> Self { Unit } }

@@ -18,10 +18,7 @@ pub fn inspect_with_options(target: &str, full_docstring: bool) -> Result<(), St
 fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
     let canonical = fs::canonicalize(root).map_err(|e| format!("{root}: {e}"))?;
     let files = crate::paths::analyse(&[&canonical], &canonical)?;
-    let files = files
-        .into_iter()
-        .map(|file| (file.path, file.doc))
-        .collect();
+    let files = files.map(|file| (file.path, file.doc)).collect();
     let root_name = Path::new(root)
         .file_name()
         .and_then(|n| n.to_str())

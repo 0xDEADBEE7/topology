@@ -96,7 +96,7 @@ fn python_candidates(mut base: PathBuf, import: &Import) -> Vec<PathBuf> {
     let named = import.name.as_ref().map(|name| base.join(name));
     let modules = named.into_iter().chain([base]);
     modules
-        .flat_map(|module| [module.with_extension("py"), module.join("__init__.py")])
+        .flat_map(|module| [module.join("__init__.py"), module.with_extension("py")])
         .collect()
 }
 

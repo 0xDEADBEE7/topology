@@ -2,7 +2,8 @@
 //!
 //! Adding a language means one `EXTENSIONS` row per extension, a `Language` variant, and
 //! a `Spec` naming the grammar's node kinds for the constructs `walk` measures, plus a
-//! check of the few kinds `walk` names itself (calls, labels, let chains, strings).
+//! check of the kinds `walk` and `syntax` name themselves (calls, labels, let chains,
+//! strings, doc comments, exports and imports).
 
 use std::path::Path;
 use tree_sitter_typescript::{LANGUAGE_TSX, LANGUAGE_TYPESCRIPT};
@@ -71,8 +72,8 @@ pub struct Spec {
     pub classes: &'static [&'static str],
     /// Containers that qualify their members, as in `View.render` or `Type::method`.
     pub scopes: &'static [&'static str],
-    /// Expressions whose functions are not members of a scope around them: objects, call
-    /// arguments, decorators, heritage clauses and static blocks.
+    /// Expressions whose functions are not members of a scope around them: objects,
+    /// decorators, heritage clauses and static blocks.
     pub detached: &'static [&'static str],
     /// Joins a container's name to a member's.
     pub separator: &'static str,
@@ -119,7 +120,6 @@ const ECMA: Spec = Spec {
     scopes: &["class_declaration", "abstract_class_declaration", "class"],
     detached: &[
         "object",
-        "arguments",
         "decorator",
         "class_heritage",
         "class_static_block",
@@ -190,7 +190,7 @@ const RUST: Spec = Spec {
     jumps: &["break_expression", "continue_expression"],
     logical: &["&&", "||"],
     comments: &["line_comment", "block_comment"],
-    docs: &["///", "/**", "#[doc"],
+    docs: &["///", "/**", "#[doc = \""],
     attributes: &["attribute_item", "line_comment", "block_comment"],
     wrappers: &[],
     wrapper_calls: &[],

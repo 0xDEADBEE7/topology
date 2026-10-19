@@ -199,7 +199,18 @@ fn declarations_carry_docs_signatures_exports_and_parents() {
             "Counter.reset false Counter [reset()] Resets the count.",
             "click false - [click: () =>] Handles a click.",
             "other false - [function other()] -",
+            "footer true - [export function footer()] Renders the copyright footer.",
+            "legacy true - [export function legacy()] -",
+            "internal true - [export function internal()] -",
+            "Store.handle false Store [@action handle = () =>] Handles a click.",
+            "Store.onKey false Store [onKey = debounce((event) =>] -",
+            "home false - [home: () =>] -",
+            "about false - [about: () =>] -",
+            "user false - [user: async (id) =>] Loads the user.",
+            "wrapper false - [function wrapper()] -",
+            "local false - [function local()] -",
             "Counter true - [export class Counter] -",
+            "Store true - [export class Store] -",
         ]
     );
     assert_eq!(
@@ -210,7 +221,11 @@ fn declarations_carry_docs_signatures_exports_and_parents() {
             "shared true - [pub(crate) fn shared()] -",
             "private false - [fn private()] -",
             "Holder::get true Holder [pub fn get(&self) -> u32] Reads the value.",
+            "bold true - [pub fn bold()] **Bold** first words.",
+            "aliased true - [pub fn aliased()] -",
+            "Unit::new true Unit [pub fn new() -> Self] -",
             "Holder true - [pub struct Holder] Holds a value.",
+            "Unit true - [pub struct Unit;] -",
         ]
     );
     assert_eq!(
@@ -220,6 +235,7 @@ fn declarations_carry_docs_signatures_exports_and_parents() {
             "fetch true - [def fetch(url):] Fetches a page.",
             "_private false - [def _private():] Single-quoted and joined.",
             "Shape.area false Shape [def area(self):] Measures it.",
+            "config true - [def config():] /etc/topo.toml is read first.",
             "Shape true - [class Shape:] -",
         ]
     );
