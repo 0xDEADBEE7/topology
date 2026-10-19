@@ -43,7 +43,7 @@ topo ./src/metrics.rs::FileMetrics
 ## Inspect one implementation
 
 ```bash
-topo ./src/extract/metadata.rs::resolve_import
+topo ./src/extract/resolution.rs::resolve_import
 topo ./tests/fixtures/typescript/basic.ts::classify
 ```
 
@@ -57,7 +57,7 @@ Search is exact-name oriented, so try likely compound names:
 topo find import
 topo find imports
 topo find resolve_import
-topo find parse_line
+topo find parse
 ```
 
 A broad concept may not match `resolve_import`. If the name is unknown, inspect the containing directory or file outline and choose from its symbols.
