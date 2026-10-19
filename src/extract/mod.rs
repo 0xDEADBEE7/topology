@@ -12,12 +12,10 @@ pub(crate) use documentation::module_doc;
 pub use inspection::{file_descriptions, file_outline};
 pub use search::{find, is_named};
 mod metadata;
-mod models;
 mod records;
 
 use std::{fs, path::Path};
 
-#[derive(Clone, Debug, serde::Deserialize)]
 /// Describes a source declaration for tree and symbol inspection.
 pub struct SymbolInfo {
     pub path: String,
@@ -41,10 +39,7 @@ pub fn run(root: &str) -> Result<(), String> {
     paths.sort();
     for path in paths {
         for value in file_records(root, &repo, &path) {
-            println!(
-                "{}",
-                serde_json::to_string(&value).map_err(|e| e.to_string())?
-            );
+            println!("{value}");
         }
     }
     Ok(())
@@ -66,5 +61,14 @@ fn repo_name(root: &Path) -> String {
         .to_owned()
 }
 fn symbol_info(value: &serde_json::Value) -> Option<SymbolInfo> {
-    serde_json::from_value(value.clone()).ok()
+    let text = |key: &str| value[key].as_str().map(str::to_owned);
+    let line = |index: usize| value["lines"][index].as_u64().map(|line| line as usize);
+    Some(SymbolInfo {
+        path: text("path")?,
+        name: text("name")?,
+        kind: text("kind")?,
+        qualified_name: text("qualified_name")?,
+        lines: [line(0)?, line(1)?],
+        description: text("description"),
+    })
 }
