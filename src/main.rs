@@ -1,14 +1,16 @@
 //! Dispatches progressive inspection, scoring, and extraction commands.
 
-mod adapters;
 mod extract;
+mod lang;
 mod metrics;
 mod paths;
+mod python;
 mod report;
 mod table;
 mod tree;
 mod visit;
 mod visitor;
+mod walk;
 
 use report::Options;
 use std::{fs, path::Path};
@@ -83,7 +85,7 @@ fn score(args: &[String]) -> Result<(), String> {
             let path = path.to_string_lossy();
             fs::read_to_string(path.as_ref())
                 .map_err(|e| e.to_string())
-                .and_then(|source| adapters::analyse(&path, &source))
+                .and_then(|source| walk::analyse(&path, &source))
                 .map_err(|e| eprintln!("warning: {path}: skipped: {e}"))
                 .ok()
         })

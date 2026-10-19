@@ -1,4 +1,4 @@
-//! Holds the per-function and per-file measurements produced by language adapters.
+//! Holds the per-function and per-file measurements produced for every language.
 
 /// Reports a function's source extent, documentation, and cognitive complexity.
 pub struct FnMetrics {

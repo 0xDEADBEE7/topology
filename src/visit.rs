@@ -1,6 +1,6 @@
 //! Collects Rust declarations and delegates function-body measurements.
 
-use crate::metrics::{ClassMetrics, FnMetrics};
+use crate::metrics::{ClassMetrics, FileMetrics, FnMetrics};
 use crate::visitor::BlockVisitor;
 use syn::{spanned::Spanned, visit::Visit, File, ImplItemFn, ItemFn, ItemStruct};
 
@@ -61,6 +61,21 @@ impl<'ast> Visit<'ast> for FnVisitor {
             has_doc_attr(&node.attrs),
         );
     }
+}
+
+/// Measures Rust functions and structures through syn until Rust moves onto the walker.
+pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
+    let file = syn::parse_file(source).map_err(|error| format!("parse error: {error}"))?;
+    let (fns, classes, has_docstring) = collect(&file);
+    Ok(FileMetrics {
+        language: "rust",
+        path: path.to_owned(),
+        loc: source.lines().count(),
+        has_docstring,
+        parse_errors: 0,
+        fns,
+        classes,
+    })
 }
 
 /// Collect Rust functions and structs while preserving source locations.

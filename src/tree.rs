@@ -82,7 +82,7 @@ fn align_width(widths: impl Iterator<Item = usize>) -> usize {
 /// Displays the source of a declaration found in the named file only.
 fn show_symbol(path: &str, name: &str) -> Result<(), String> {
     let source = fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    let file = crate::adapters::analyse(path, &source).map_err(|e| format!("{path}: {e}"))?;
+    let file = crate::walk::analyse(path, &source).map_err(|e| format!("{path}: {e}"))?;
     let (start, end) = (file.fns.iter().map(|f| (&f.name, f.line_start, f.line_end)))
         .chain(
             file.classes

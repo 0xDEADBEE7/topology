@@ -112,6 +112,32 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
 }
 
 #[test]
+fn extract_records_signatures_grouped_imports_and_module_paths() {
+    let project = Project::new();
+    project.write(
+        "src/build.rs",
+        "//! Builds.\nuse crate::{metrics, visit::collect};\n\npub fn build(\n    input: &str,\n) -> Result<(), Error> {\n    Ok(())\n}\n",
+    );
+    project.write("src/widget.ts", "export function widget() {}\n");
+    let records: Vec<serde_json::Value> = String::from_utf8(project.run("extract").stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let named = |name: &str| records.iter().find(|r| r["name"] == name).expect(name);
+    let signature = "pub fn build( input: &str, ) -> Result<(), Error> {";
+    assert_eq!(named("build")["signature"], signature);
+    assert_eq!(named("build")["qualified_name"], "src/build::build");
+    assert_eq!(named("widget")["qualified_name"], "src/widget::widget");
+    let imported = |local: &str| {
+        records
+            .iter()
+            .any(|r| r["type"] == "import" && r["local_name"] == local)
+    };
+    assert!(imported("metrics") && imported("collect"));
+}
+
+#[test]
 fn typescript_and_tsx_use_their_own_grammars() {
     let project = Project::new();
     for file in ["assertion.ts", "assertion.tsx"] {

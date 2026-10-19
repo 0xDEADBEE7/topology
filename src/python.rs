@@ -1,4 +1,4 @@
-//! Provides approximate line-based metrics for scripting-language adapters.
+//! Provides approximate line-based metrics for Python until it moves onto the walker.
 
 mod counts;
 mod syntax;
@@ -6,7 +6,7 @@ use crate::metrics::{ClassMetrics, FileMetrics, FnMetrics};
 use counts::{close_count, decision_count, open_count};
 use syntax::{function_name, has_file_docstring, has_python_docstring};
 
-/// Analyse source with the lightweight line-based adapter shared by scripting languages.
+/// Analyse Python source with the lightweight line-based heuristic.
 pub fn analyse_text(language: &'static str, path: &str, source: &str) -> FileMetrics {
     FileMetrics {
         language,

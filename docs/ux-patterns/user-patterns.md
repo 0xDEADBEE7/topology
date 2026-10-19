@@ -66,8 +66,8 @@ A broad concept may not match `resolve_import`. If the name is unknown, inspect 
 Inspect the module that registers entry points, then the relevant symbol:
 
 ```bash
-topo ./src/adapters/mod.rs
-topo ./src/adapters/mod.rs::for_path
+topo ./src/lang.rs
+topo ./src/lang.rs::from_path
 ```
 
 This distinguishes exported entry points from private implementation details.

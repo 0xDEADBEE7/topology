@@ -12,7 +12,7 @@ pub fn collect(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
         return Ok(());
     }
     if metadata.is_file() {
-        if crate::adapters::for_path(&root.to_string_lossy()).is_ok() {
+        if crate::lang::Language::from_path(root).is_some() {
             paths.push(root.to_owned());
         }
         return Ok(());

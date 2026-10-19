@@ -1,6 +1,6 @@
 //! Resolves repository-local imports to supported source paths.
 
-use crate::adapters::ECMA_EXTENSIONS;
+use crate::lang::{Language, EXTENSIONS};
 use std::path::{Path, PathBuf};
 
 /// Resolve an import against files local to the repository.
@@ -51,16 +51,21 @@ pub(super) fn resolve_import(
 /// Lists files a relative script import may name: the path itself, the path with each
 /// script extension or index file, and TypeScript sources imported by their `.js` names.
 fn script_candidates(base: &Path) -> Vec<PathBuf> {
+    let scripts = || {
+        EXTENSIONS
+            .iter()
+            .filter(|(_, language)| !matches!(language, Language::Rust | Language::Python))
+    };
     let mut candidates = vec![base.to_owned()];
-    for extension in ECMA_EXTENSIONS {
+    for (extension, _) in scripts() {
         let mut file = base.as_os_str().to_owned();
         file.push(format!(".{extension}"));
         candidates.push(file.into());
     }
-    candidates.extend(ECMA_EXTENSIONS.map(|extension| base.join(format!("index.{extension}"))));
-    let emitted = base.extension().and_then(|ext| ext.to_str());
-    if matches!(emitted, Some("js" | "jsx" | "mjs" | "cjs")) {
-        candidates.extend(["ts", "tsx", "mts", "cts"].map(|ts| base.with_extension(ts)));
+    candidates.extend(scripts().map(|(extension, _)| base.join(format!("index.{extension}"))));
+    if Language::from_path(base) == Some(Language::JavaScript) {
+        let typescript = scripts().filter(|(_, language)| *language != Language::JavaScript);
+        candidates.extend(typescript.map(|(extension, _)| base.with_extension(extension)));
     }
     candidates
 }

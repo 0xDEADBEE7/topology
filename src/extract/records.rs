@@ -19,7 +19,7 @@ pub(super) fn records(
         .to_string_lossy()
         .to_string();
     let relative = relative.strip_prefix("./").unwrap_or(&relative).to_owned();
-    let analysed = crate::adapters::analyse(&relative, &source)?;
+    let analysed = crate::walk::analyse(&relative, &source)?;
     let language = analysed.language;
     let imports = imports::imports(root, repo, &relative, language, &source);
     let import_ids = imports.iter().map(|import| import.id.clone()).collect();
@@ -72,7 +72,7 @@ fn export(language: &str, source: &str, start: usize, end: usize) -> Option<Expo
     })
 }
 
-/// Combines file metadata with the adapter's size and parse status.
+/// Combines file metadata with the measured size and parse status.
 fn file_record(
     relative: &str,
     repo: &str,

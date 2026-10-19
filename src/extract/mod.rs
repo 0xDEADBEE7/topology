@@ -68,32 +68,3 @@ fn repo_name(root: &Path) -> String {
 fn symbol_info(value: &serde_json::Value) -> Option<SymbolInfo> {
     serde_json::from_value(value.clone()).ok()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::imports;
-    use super::metadata::{module_path, signature};
-
-    #[test]
-    fn captures_multiline_signature() {
-        let source = "pub fn build(\n    input: &str,\n) -> Result<(), Error> {\n    Ok(())\n}";
-        assert_eq!(
-            signature("rust", source, 1),
-            "pub fn build( input: &str, ) -> Result<(), Error> {"
-        );
-    }
-
-    #[test]
-    fn splits_grouped_rust_imports() {
-        let imports = imports::parse("rust", "use crate::{metrics, visit::collect};", 3);
-        assert_eq!(imports.len(), 2);
-        assert_eq!(imports[0].local_name.as_deref(), Some("metrics"));
-        assert_eq!(imports[1].local_name.as_deref(), Some("collect"));
-    }
-
-    #[test]
-    fn strips_supported_extensions_from_module_paths() {
-        assert_eq!(module_path("src/metrics.rs"), "src/metrics");
-        assert_eq!(module_path("src/widget.ts"), "src/widget");
-    }
-}

@@ -1,6 +1,6 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0–M3 done.
+Status (October 2026): M0–M4 done.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
@@ -27,10 +27,19 @@ Status (October 2026): M0–M3 done.
   long: an 849-line pointer handler with cognitive 226). Rust and Python output is
   unchanged. Beyond the plan: a function's lines are the lines it owns (named nested
   functions count separately), so a `describe` block is not charged for its `it` units.
+  M3 added about 170 lines of product code, above its +80 to +110 estimate.
+- M4 verify: `src/lang.rs` holds the `Language` enum, the only extension list, and the
+  TS/TSX/JS syntax table; `src/walk.rs` is the table-driven walker and the one `analyse`
+  entry point; the `Adapter` trait and `src/adapters/` are gone (the Python heuristic
+  moved to `src/python.rs`, the Rust entry point into `src/visit.rs`, both for M5 to
+  delete). Extract, score, tree and outline output is byte-identical to M3 on every
+  corpus repository and on topo itself. Unit tests left `src` for integration tests in
+  `tests/` (not a separate `tests/languages.rs`). M4 removed only 10 lines, not the
+  planned 80–120: the syntax table and `Language` methods cost about what the adapter
+  layer saved, so the reduction now rests on M5 deleting syn and the Python heuristic.
 - Python and Rust still score the Docs column with their own heuristics until M5.
-- Size: `src` is 32 files and 2,299 lines. M3 added about 170 lines of product code,
-  above its +80 to +110 estimate, and moved the TypeScript unit tests to `tests/`
-  (pulled forward from M4). Budget 32 files, 2,324 lines; yellow share 0‰.
+- Size: `src` is 27 files and 2,289 lines with no test code. Budget 27 files, 2,314
+  lines; yellow share 0‰.
 
 ## 1. Recommendation
 

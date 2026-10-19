@@ -5,9 +5,9 @@ pub(super) use super::{
     documentation::{docstring, module_doc},
     resolution::resolve_import,
 };
-use crate::adapters::ECMA_EXTENSIONS;
+use crate::lang::Language;
 
-/// Normalize an adapter language identifier for serialized output.
+/// Normalize a language name for serialized output.
 pub(super) fn language_name(language: &str) -> &'static str {
     match language {
         "rust" => "rust",
@@ -21,8 +21,7 @@ pub(super) fn language_name(language: &str) -> &'static str {
 /// Remove a supported source extension from a relative module path.
 pub(super) fn module_path(path: &str) -> &str {
     match path.rsplit_once('.') {
-        Some((stem, "rs" | "py")) => stem,
-        Some((stem, extension)) if ECMA_EXTENSIONS.contains(&extension) => stem,
+        Some((stem, _)) if Language::from_path(path).is_some() => stem,
         _ => path,
     }
 }
@@ -32,7 +31,7 @@ pub(super) fn qualified_name(path: &str, name: &str) -> String {
     format!("{}::{name}", module_path(path))
 }
 
-/// Map an adapter language to the exported record kind.
+/// Map a language to the record kind of its classes.
 pub(super) fn class_kind(language: &str) -> &'static str {
     if language == "rust" {
         "struct"
