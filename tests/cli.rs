@@ -94,7 +94,7 @@ fn react_semantics_name_fold_and_rate_functions() {
             ("classify", 9, 5),
             ("describe(\"store\")", 2, 0),
             ("it(\"increments\")", 5, 1),
-            ("register(…)", 1, 0),
+            ("register(…)", 0, 0),
             ("stream.on(\"data\")", 3, 0),
             ("stream.on(…).on(\"end\")", 3, 0),
             ("pick", 1, 0),
@@ -245,6 +245,76 @@ fn doc_column_matches_extracted_descriptions() {
             assert_eq!(documented(path), described, "{path}");
         }
     }
+}
+
+/// Lists each function as `name start–end loc`.
+fn extents(path: &str) -> Vec<String> {
+    let records = records(path);
+    let functions = records.iter().filter(|r| r["type"] == "function");
+    let row = |r: &serde_json::Value| {
+        let (lines, loc) = (&r["lines"], &r["metrics"]["loc"]);
+        format!(
+            "{} {}–{} {loc}",
+            r["name"].as_str().unwrap(),
+            lines[0],
+            lines[1]
+        )
+    };
+    functions.map(row).collect()
+}
+
+/// Units start at the binding that names them, own the rows only they hold, and take
+/// their names from their own declarations; blank Unicode rows are not code.
+#[test]
+fn units_start_at_their_bindings_and_own_their_rows() {
+    let path = "tests/fixtures/typescript/ranges.tsx";
+    let expected = [
+        "viaPair 4–6 3",
+        "viaAssignment 10–11 2",
+        "render 14–14 1",
+        "UserTable.visible 16–17 2",
+        "UserTable.render 18–20 3",
+        "factory 23–23 1",
+        "describe 24–24 1",
+        "Button 26–28 2",
+        "withAuth 31–38 0",
+        "WithAuth 31–38 6",
+        "fetch(…).then(…) 40–45 3",
+        "parse 41–43 3",
+        "loaded 40–45 0",
+    ];
+    assert_eq!(extents(path), expected);
+    let records = records(path);
+    for (name, doc) in [
+        ("viaPair", "Declared with an object key."),
+        ("viaAssignment", "Declared by assignment."),
+        ("UserTable.visible", "Declared as a class field."),
+    ] {
+        let record = records.iter().find(|r| r["name"] == name).expect(name);
+        assert_eq!(record["description"], doc);
+    }
+    assert!(topo(&[path]).contains("\n  loaded (L40–45)\n    parse (L41–43)\n"));
+    let expected = [
+        "[u8; 4]::size 8–8 1",
+        "(A, B)::size 12–12 1",
+        "dyn Size + Send::twice 16–16 1",
+        "*const u8::size 20–20 1",
+        "Vec::size 24–27 3",
+    ];
+    assert_eq!(extents("tests/fixtures/rust/impls.rs"), expected);
+    let path = "tests/fixtures/python/docstrings.py";
+    let expected = [
+        "label 4–6 2",
+        "formatted 9–11 2",
+        "raw_bytes 14–16 2",
+        "plain 19–22 2",
+    ];
+    assert_eq!(extents(path), expected);
+    assert_eq!(
+        documented(path),
+        ["plain"],
+        "f-strings and bytes are not docstrings"
+    );
 }
 
 /// Pins the extract record shapes; regenerate basic.jsonl only for a deliberate change.

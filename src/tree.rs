@@ -69,7 +69,9 @@ fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
             let contains =
                 |(o, _): &&(&Unit, _)| o.line_start <= s.line_start && s.line_end <= o.line_end;
             let containers = units.iter().filter(contains);
-            let depth = 1 + containers.filter(|(o, _)| lines(o) != lines(s)).count();
+            let mut ranges: Vec<_> = containers.map(|(o, _)| lines(o)).collect();
+            ranges.dedup();
+            let depth = ranges.len();
             let indent = "  ".repeat(depth);
             let row = format!("{indent}{} (L{}–{})", s.name, s.line_start, s.line_end);
             (row, s.doc.clone())

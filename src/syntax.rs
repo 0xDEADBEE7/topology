@@ -101,7 +101,18 @@ fn is_doc(spec: &Spec, text: &str) -> bool {
 fn docstring(spec: &Spec, source: &str, body: Node<'_>) -> Option<String> {
     let mut cursor = body.walk();
     let first = body.named_children(&mut cursor).find(|s| !s.is_extra())?;
-    is_docstring(spec, first).then(|| summary(&doc_text(source, first)))?
+    let doc = is_docstring(spec, first) && !formatted(source, first);
+    doc.then(|| summary(&doc_text(source, first)))?
+}
+
+/// Whether a string statement holds an f-string or bytes literal, which Python never
+/// takes as a docstring.
+fn formatted(source: &str, node: Node<'_>) -> bool {
+    let mut cursor = node.walk();
+    let children: Vec<_> = node.named_children(&mut cursor).collect();
+    let prefix = &source[node.byte_range()];
+    node.kind() == "string_start" && prefix.contains(['f', 'F', 'b', 'B'])
+        || (children.into_iter()).any(|child| formatted(source, child))
 }
 
 /// Describes a file by its module docstring, or by the doc comments before its first

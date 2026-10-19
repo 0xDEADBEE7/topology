@@ -13,7 +13,7 @@ const BODY: &[&str] = &["body"];
 
 /// Measures one source file, warning when only part of it could be parsed.
 pub fn analyse(path: &str, source: &str) -> Result<FileInfo, String> {
-    let language = Language::from_path(path).ok_or_else(|| unsupported(path))?;
+    let language = Language::from_path(path).ok_or("unsupported language")?;
     let (grammar, spec) = language.grammar();
     let mut parser = Parser::new();
     parser
@@ -29,6 +29,7 @@ pub fn analyse(path: &str, source: &str) -> Result<FileInfo, String> {
         fns: Vec::new(),
         classes: Vec::new(),
         imports: Vec::new(),
+        spans: Vec::new(),
         exports: syntax::export_names(tree.root_node(), source),
     };
     walker.walk(tree.root_node(), None, 0);
@@ -48,27 +49,14 @@ pub fn analyse(path: &str, source: &str) -> Result<FileInfo, String> {
     })
 }
 
-fn unsupported(path: &str) -> String {
-    match std::path::Path::new(path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-    {
-        Some(extension) => format!("unsupported language: .{extension}"),
-        None => "cannot determine language: file has no extension".to_owned(),
-    }
-}
-
 /// Counts the ERROR and MISSING nodes left by tree-sitter's error recovery.
 fn syntax_errors(node: Node<'_>) -> usize {
     if node.is_error() || node.is_missing() {
         return 1;
     }
     let mut cursor = node.walk();
-    let children = node.children(&mut cursor);
-    children
-        .filter(|child| child.has_error())
-        .map(syntax_errors)
-        .sum()
+    let children = node.children(&mut cursor).filter(|child| child.has_error());
+    children.map(syntax_errors).sum()
 }
 
 /// Walks one syntax tree using its language's table, collecting units, classes, imports
@@ -81,6 +69,8 @@ struct Walker<'a> {
     fns: Vec<Unit>,
     classes: Vec<Unit>,
     imports: Vec<Import>,
+    /// Bytes from each unit's declaration to its end, which break ties between equal rows.
+    spans: Vec<usize>,
     /// Names that `export { a }` or `export default a` expose.
     exports: Vec<String>,
 }
@@ -127,6 +117,8 @@ impl Walker<'_> {
 
     /// Starts a named unit at its declaration.
     fn open(&mut self, node: Node<'_>, name: String) -> usize {
+        let span = node.end_byte() - self.declaration(node).start_byte();
+        self.spans.push(span);
         self.fns.push(self.unit(node, name));
         self.fns.len() - 1
     }
@@ -149,11 +141,13 @@ impl Walker<'_> {
         }
     }
 
-    /// Gives each code row to the smallest unit holding it, the earlier one on equal ranges.
+    /// Gives each code row to the smallest unit holding it, in rows and then bytes, and to
+    /// the earlier one on equal ranges.
     fn units(&mut self) -> Vec<Unit> {
         let mut owners = vec![None; self.code.len()];
         let mut order: Vec<_> = (0..self.fns.len()).collect();
-        order.sort_by_key(|&i| Reverse((self.fns[i].line_end - self.fns[i].line_start, i)));
+        let rows = |i: usize| self.fns[i].line_end - self.fns[i].line_start;
+        order.sort_by_key(|&i| Reverse((rows(i), self.spans[i], i)));
         for i in order {
             let unit = &self.fns[i];
             owners[unit.line_start - 1..unit.line_end.min(self.code.len())].fill(Some(i));
@@ -167,12 +161,13 @@ impl Walker<'_> {
     }
 
     /// Marks the rows of source text that no child node covers, such as tokens and the
-    /// grammar's hidden tokens, as code.
+    /// grammar's hidden tokens, as code; Unicode and zero-width spaces are blank.
     fn mark_code(&mut self, (row, start): (usize, usize), end: usize) {
-        let text = self.source.as_bytes().get(start..end).unwrap_or_default();
-        for (offset, line) in text.split(|byte| *byte == b'\n').enumerate() {
+        let text = self.source.get(start..end).unwrap_or_default();
+        let blank = |c: char| c.is_whitespace() || "\u{200B}\u{2060}\u{FEFF}".contains(c);
+        for (offset, line) in text.split('\n').enumerate() {
             let row = self.code.get_mut(row + offset);
-            if let Some(code) = row.filter(|_| !line.trim_ascii().is_empty()) {
+            if let Some(code) = row.filter(|_| !line.trim_matches(blank).is_empty()) {
                 *code = true;
             }
         }
@@ -262,8 +257,10 @@ impl Walker<'_> {
     /// one that no function or call argument precedes.
     fn passes_arguments(&self, arguments: Node<'_>, child: Node<'_>) -> bool {
         let mut cursor = arguments.walk();
-        let mut earlier =
-            (arguments.named_children(&mut cursor)).take_while(|a| a.id() != child.id());
+        let arguments_before = arguments
+            .named_children(&mut cursor)
+            .filter(|a| !a.is_extra());
+        let mut earlier = arguments_before.take_while(|a| a.id() != child.id());
         let wrapper = arguments
             .parent()
             .is_some_and(|call| self.is_wrapper_call(call));
@@ -285,7 +282,7 @@ impl Walker<'_> {
     /// Names the class, impl or trait holding a member, unless a function holds it first.
     fn scope(&self, member: Node<'_>) -> Option<String> {
         let spec = self.spec;
-        let stops = [spec.functions, spec.closures, spec.scopes];
+        let stops = [spec.functions, spec.closures, spec.scopes, spec.detached];
         let mut ancestors = std::iter::successors(member.parent(), |node| node.parent());
         let scope =
             ancestors.find(|node| stops.iter().any(|kinds| kinds.contains(&node.kind())))?;
@@ -303,9 +300,16 @@ impl Walker<'_> {
                 .and_then(|node| self.text(node))
         };
         let implemented = || {
-            let path = field("type")?;
-            let path = path.split('<').next()?.rsplit([':', ' ', '&']).next()?;
-            Some(path.to_owned())
+            let named = std::iter::successors(class.child_by_field_name("type"), |node| {
+                let field = match node.kind() {
+                    "reference_type" | "generic_type" => "type",
+                    "scoped_type_identifier" => "name",
+                    _ => return None,
+                };
+                node.child_by_field_name(field)
+            });
+            let text = self.text(named.last()?)?;
+            Some(text.split_whitespace().collect::<Vec<_>>().join(" "))
         };
         let own = field("name").or_else(implemented);
         own.map(|name| self.qualify(class, name))
@@ -326,8 +330,9 @@ impl Walker<'_> {
     }
 
     /// Whether a declaration reaches `parent`: a wrapper, a declaration, the arguments that
-    /// bind `child`, or a call, unless that call is a method whose value is not declared (so
-    /// `items.filter(cb)` starts at its arguments but `it.each(table)(cb)` takes its table).
+    /// bind `child`, or a call, unless that call is a method whose value is neither bound nor
+    /// declared (so `items.filter(cb)` starts at its arguments but `it.each(table)(cb)` takes
+    /// its table).
     fn climbs(&self, parent: Node<'_>, child: Node<'_>) -> bool {
         let kind = parent.kind();
         let through = self.spec.wrappers.contains(&kind) || self.spec.declarations.contains(&kind);
@@ -337,9 +342,14 @@ impl Walker<'_> {
         through
             && match kind {
                 "arguments" => self.passes_arguments(parent, child),
-                "call_expression" if method => parent
-                    .parent()
-                    .is_some_and(|outer| self.climbs(outer, parent)),
+                "call_expression" if method => parent.parent().is_some_and(|outer| {
+                    let bound = self
+                        .spec
+                        .bindings
+                        .iter()
+                        .any(|(kind, _)| *kind == outer.kind());
+                    bound || self.climbs(outer, parent)
+                }),
                 _ => true,
             }
     }
