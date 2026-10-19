@@ -142,6 +142,29 @@ fn symbol_lookup_reads_only_the_named_file() {
 }
 
 #[test]
+fn tree_nests_a_directory_beside_its_same_named_file() {
+    let project = Project::new();
+    project.write("a.rs", "//! First file.\n");
+    project.write("a/b.rs", "//! Nested file.\n");
+    project.write("c.rs", "fn c() {}\n");
+    let output = Command::new(env!("CARGO_BIN_EXE_topo"))
+        .arg(&project.0)
+        .output()
+        .unwrap();
+    let tree = String::from_utf8(output.stdout).unwrap();
+    let body: Vec<_> = tree.lines().skip(1).collect();
+    assert_eq!(
+        body,
+        [
+            "├─ a/",
+            "│  └─ b.rs  #── Nested file.",
+            "├─ a.rs  #───── First file.",
+            "└─ c.rs",
+        ]
+    );
+}
+
+#[test]
 fn symbol_descriptions_include_preceding_rust_and_jsdoc_comments() {
     let project = Project::new();
     project.write(

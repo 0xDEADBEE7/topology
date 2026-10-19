@@ -1,10 +1,6 @@
 //! Renders repository, file, and symbol topology.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs,
-    path::Path,
-};
+use std::{collections::BTreeMap, fs, path::Path};
 
 /// Displays repository, file, or symbol detail according to the target path.
 pub fn inspect_with_options(target: &str, full_docstring: bool) -> Result<(), String> {
@@ -62,9 +58,8 @@ fn run_directory(root: &str, full_docstring: bool) -> Result<(), String> {
 }
 
 /// Reads the description attached to a containing directory.
-fn directory_doc(root: &str, parts: &[&str], index: usize) -> Option<String> {
-    let path = Path::new(root).join(parts[..=index].join("/"));
-    read_docstring(&path)
+fn directory_doc(root: &str, parts: &[String]) -> Option<String> {
+    read_docstring(&Path::new(root).join(parts.join("/")))
 }
 
 fn read_docstring(directory: &Path) -> Option<String> {
@@ -159,37 +154,31 @@ struct Entry {
     directory: bool,
 }
 
-/// Builds one sorted entry per source file and containing directory.
+/// Builds one entry per source file and containing directory, ordered by path components.
 fn tree_entries(root: &str, files: Vec<(String, Option<String>)>) -> Vec<Entry> {
     let mut descriptions = BTreeMap::new();
-    let mut paths = BTreeSet::new();
     for (path, description) in files {
         let parts: Vec<String> = path.split('/').map(str::to_owned).collect();
-        for index in 0..parts.len() {
-            let path = parts[..=index].join("/");
-            paths.insert(path.clone());
-            if index + 1 == parts.len() {
-                descriptions.insert(path, description.clone());
-            } else {
-                descriptions.entry(path).or_insert_with(|| {
-                    directory_doc(
-                        root,
-                        &parts.iter().map(String::as_str).collect::<Vec<_>>(),
-                        index,
-                    )
-                });
-            }
+        for index in 1..parts.len() {
+            descriptions
+                .entry(parts[..index].to_vec())
+                .or_insert_with(|| directory_doc(root, &parts[..index]));
         }
+        descriptions.insert(parts, description);
     }
-    let path_list: Vec<_> = paths.iter().cloned().collect();
+    let paths: Vec<_> = descriptions.into_iter().collect();
+    let directories: Vec<bool> = paths
+        .windows(2)
+        .map(|pair| pair[1].0.starts_with(&pair[0].0))
+        .chain([false])
+        .collect();
     paths
         .into_iter()
-        .map(|path| Entry {
-            directory: path_list.iter().any(|candidate| {
-                candidate != &path && candidate.starts_with(&(path.clone() + "/"))
-            }),
-            parts: path.split('/').map(str::to_owned).collect(),
-            description: descriptions.remove(&path).flatten(),
+        .zip(directories)
+        .map(|((parts, description), directory)| Entry {
+            parts,
+            description,
+            directory,
         })
         .collect()
 }
