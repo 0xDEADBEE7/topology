@@ -1,6 +1,9 @@
 //! Exercises React assessment through the public command-line interface.
 
-use std::process::Command;
+use std::{
+    io::{BufRead, BufReader},
+    process::{Command, Stdio},
+};
 
 fn topo(args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_topo"))
@@ -25,6 +28,10 @@ fn react_files_support_scoring_inspection_and_extraction() {
     let path = "tests/fixtures/typescript/components.tsx";
     let score = topo(&["score", path, "--detail", "--all-metrics", "--no-colour"]);
     assert!(score.contains("Greeting"));
+    assert!(
+        !topo(&["score", path]).contains('\x1b'),
+        "colour in piped output"
+    );
     assert!(score.contains("App"));
     let outline = topo(&["--full-docstring", path]);
     assert!(outline.contains("Chooses the greeting content."));
@@ -42,6 +49,28 @@ fn react_files_support_scoring_inspection_and_extraction() {
 const MAX_FILES: usize = 45;
 const MAX_LINES: u64 = 2_650;
 const MAX_DEPENDENCIES: usize = 6;
+
+#[test]
+fn closed_output_pipes_end_quietly() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_topo"))
+        .args(["extract", "src"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut first = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut first)
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(first.starts_with('{'));
+    assert!(
+        output.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_ne!(output.status.code(), Some(101));
+}
 
 #[test]
 fn partially_parsed_files_keep_their_functions() {

@@ -1,5 +1,7 @@
 //! Defines report options and metric selection syntax.
 
+use std::io::IsTerminal;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Selects an assessment dimension for tabular output.
 pub enum Metric {
@@ -22,7 +24,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             detail: false,
-            colour: true,
+            colour: std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none(),
             metrics: vec![Metric::Nmi],
             guide: false,
         }
