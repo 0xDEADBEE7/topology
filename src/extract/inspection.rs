@@ -1,6 +1,6 @@
 //! Builds file outlines and repository descriptions for progressive inspection.
 
-use super::{records, repo_name, symbol_info, SymbolInfo};
+use super::{file_records, records, repo_name, symbol_info, SymbolInfo};
 use std::fs;
 
 /// Return the indexed symbols belonging to one source file.
@@ -40,7 +40,7 @@ pub fn file_descriptions(root: &str) -> Result<Vec<(String, Option<String>)>, St
     paths.sort();
     let mut files = Vec::new();
     for path in paths {
-        for record in records::records(&root, &repo, &path)? {
+        for record in file_records(&root, &repo, &path) {
             if record.get("type").and_then(serde_json::Value::as_str) == Some("file") {
                 files.push((
                     record

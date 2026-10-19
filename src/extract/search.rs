@@ -1,6 +1,6 @@
 //! Locates matching declarations across repository source files.
 
-use super::{records, repo_name, symbol_info, SymbolInfo};
+use super::{file_records, repo_name, symbol_info, SymbolInfo};
 use std::fs;
 
 /// Find all extracted function and class definitions matching a name.
@@ -11,7 +11,7 @@ pub fn find(root: &str, query: &str) -> Result<Vec<SymbolInfo>, String> {
     crate::paths::collect(&root, &mut paths)?;
     let mut matches = Vec::new();
     for path in paths {
-        for value in records::records(&root, &repo, &path)? {
+        for value in file_records(&root, &repo, &path) {
             if let Some(symbol) = symbol_info(&value) {
                 let path_name = format!("{}::{}", symbol.path, symbol.name);
                 if symbol.name == query || symbol.qualified_name == query || path_name == query {

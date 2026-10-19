@@ -20,9 +20,9 @@ dependency folders (`node_modules`, `vendor`), build folders (`target`, `dist`,
 Explicitly named directories are scanned even if their name is normally excluded.
 TypeScript with syntax errors is measured from tree-sitter's recovered tree; a
 warning names the file and its error count, and extraction records it as
-`parse_errors`. Scoring fails on unreadable source, on Rust that `syn` cannot
-parse, and on empty inputs. Extraction skips such files with a message on stderr
-while emitting records for the other files.
+`parse_errors`. Every command skips a file it cannot read or parse (Rust that
+`syn` rejects) with a warning naming it; scoring fails only when no file could
+be analysed.
 
 Relative imports resolve existing TypeScript and JavaScript files and directory
 indexes. Package imports and tsconfig aliases remain unresolved. This is

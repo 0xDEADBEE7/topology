@@ -36,19 +36,23 @@ pub fn run(root: &str) -> Result<(), String> {
     crate::paths::collect(&root, &mut paths)?;
     paths.sort();
     for path in paths {
-        match records::records(&root, &repo, &path) {
-            Ok(values) => {
-                for value in values {
-                    println!(
-                        "{}",
-                        serde_json::to_string(&value).map_err(|e| e.to_string())?
-                    );
-                }
-            }
-            Err(error) => eprintln!("{}: {error}", path.display()),
+        for value in file_records(&root, &repo, &path) {
+            println!(
+                "{}",
+                serde_json::to_string(&value).map_err(|e| e.to_string())?
+            );
         }
     }
     Ok(())
+}
+
+/// Builds one file's records, or warns and skips it so a bad file never aborts a command.
+fn file_records(root: &Path, repo: &str, path: &Path) -> Vec<serde_json::Value> {
+    records::records(root, repo, path).unwrap_or_else(|error| {
+        let shown = path.strip_prefix(root).unwrap_or(path);
+        eprintln!("warning: {}: skipped: {error}", shown.display());
+        Vec::new()
+    })
 }
 
 fn repo_name(root: &Path) -> String {

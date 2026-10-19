@@ -18,17 +18,20 @@ pub fn score(args: &[String]) -> Result<(), String> {
     }
     files.sort();
     files.dedup();
-    if files.is_empty() {
-        return Err("no supported source files found".to_owned());
-    }
-    let analysed = files
+    let analysed: Vec<_> = files
         .iter()
-        .map(|path| {
+        .filter_map(|path| {
             let path = path.to_string_lossy();
-            let source = fs::read_to_string(path.as_ref()).map_err(|e| format!("{path}: {e}"))?;
-            adapters::analyse(&path, &source).map_err(|e| format!("{path}: {e}"))
+            fs::read_to_string(path.as_ref())
+                .map_err(|e| e.to_string())
+                .and_then(|source| adapters::analyse(&path, &source))
+                .map_err(|e| eprintln!("warning: {path}: skipped: {e}"))
+                .ok()
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect();
+    if analysed.is_empty() {
+        return Err("no supported source files could be analysed".to_owned());
+    }
     report::print_table(&analysed, &options);
     if options.guide {
         report::print_guide(options.colour);

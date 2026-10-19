@@ -93,6 +93,25 @@ fn scoring_rejects_empty_projects_and_measures_invalid_source() {
 }
 
 #[test]
+fn commands_skip_files_they_cannot_parse() {
+    let project = Project::new();
+    project.write("good.rs", "//! Good.\n/// Works.\npub fn works() {}\n");
+    project.write("broken.rs", "fn broken( {");
+    for command in ["score", "extract"] {
+        let output = project.run(command);
+        assert!(output.status.success(), "{command}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("broken.rs"));
+    }
+    let find = Command::new(env!("CARGO_BIN_EXE_topo"))
+        .args(["find", "works"])
+        .current_dir(&project.0)
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&find.stdout).contains("good.rs::works"));
+    assert!(String::from_utf8_lossy(&find.stderr).contains("broken.rs"));
+}
+
+#[test]
 fn symbol_descriptions_include_preceding_rust_and_jsdoc_comments() {
     let project = Project::new();
     project.write(
