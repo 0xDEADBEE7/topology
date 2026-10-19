@@ -54,7 +54,7 @@ impl Item for FnMetrics {
     }
     fn metrics(&self) -> Option<SymbolMetrics> {
         Some(SymbolMetrics {
-            loc: self.loc(),
+            loc: self.loc,
             cognitive: self.cognitive,
             band: crate::report::function_band(self).name(),
         })

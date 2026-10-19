@@ -57,10 +57,10 @@ fn read_docstring(directory: &Path) -> Option<String> {
 fn show_file(path: &str, full_docstring: bool) -> Result<(), String> {
     let (description, mut symbols) = crate::extract::file_outline(path)?;
     symbols.sort_by_key(|s| (s.lines[0], std::cmp::Reverse(s.lines[1])));
-    let rows: Vec<_> = (symbols.iter())
-        .map(|s| {
+    let rows: Vec<_> = (symbols.iter().enumerate())
+        .map(|(index, s)| {
             let contains = |o: &&SymbolInfo| o.lines[0] <= s.lines[0] && s.lines[1] <= o.lines[1];
-            let depth = symbols.iter().filter(contains).count();
+            let depth = symbols[..=index].iter().filter(contains).count();
             let indent = "  ".repeat(depth);
             let row = format!("{indent}{} (L{}–{})", s.name, s.lines[0], s.lines[1]);
             (row, s.description.clone())
@@ -89,7 +89,9 @@ fn show_symbol(path: &str, name: &str) -> Result<(), String> {
                 .iter()
                 .map(|c| (&c.name, c.line_start, c.line_end)),
         )
-        .find_map(|(symbol, start, end)| is_named(symbol, name).then_some((start, end)))
+        .filter(|(symbol, ..)| is_named(symbol, name))
+        .min_by_key(|(symbol, ..)| *symbol != name)
+        .map(|(_, start, end)| (start, end))
         .ok_or_else(|| format!("symbol not found: {path}::{name}"))?;
     println!("{path}::{name} (L{start}–{end})");
     for line in source

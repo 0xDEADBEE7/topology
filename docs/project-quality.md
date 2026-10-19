@@ -20,41 +20,50 @@ Scoring and extraction share deterministic source discovery. Hidden entries,
 dependency folders (`node_modules`, `vendor`), build folders (`target`, `dist`,
 `build`, `bin`), and `coverage` are excluded. Symbolic links are not followed.
 Explicitly named directories are scanned even if their name is normally excluded.
-TypeScript with syntax errors is measured from tree-sitter's recovered tree; a
-warning names the file and its error count, and extraction records it as
-`parse_errors`. Every command skips a file or directory it cannot read or parse (Rust that
-`syn` rejects) with a warning naming it; scoring fails only when no file could
-be analysed.
+Every language is parsed with tree-sitter. A file with syntax errors is measured
+from the recovered tree; a warning names the file and its error count, and
+extraction records it as `parse_errors`. Every command skips a file or directory
+it cannot read with a warning naming it; scoring fails only when no file could be
+analysed.
 
 The tree reads descriptions without parsing: the first paragraph of a leading
 `//!`, `/*!` or `/** */` comment or Python docstring, up to its first `@` tag. It
 skips plain `/* */` comments, license headers, `@` pragmas, reStructuredText
-titles and directives such as `'use client'`. TypeScript and JavaScript score the
-Docs column with the same reader.
+titles and directives such as `'use client'`. The score's Docs column for files
+uses the same reader in every language.
 
 `topo score` rates functions, not files. A function takes the worse of two bands
 (`topo score --guide <path>` prints them):
 
 | Metric | Green | Yellow | Red |
 |---|---|---|---|
-| Lines | ≤ 60 | 61–70 | > 70 |
+| Code lines | ≤ 40 | 41–75 | > 75 |
 | Cognitive complexity | ≤ 10 | 11–15 | > 15 |
 
 Each file row shows its lines and whether it has a module doc, followed by its
 yellow and red functions (`--detail` lists every function). A summary line counts
 the yellow and red functions and the share of function lines they hold, plus doc
 coverage, and `~` marks partially parsed files. Extracted function records carry `loc`, `cognitive`
-and `band`. A function's lines are the physical lines it owns: named functions
-nested inside it count separately. TypeScript and JavaScript follow SonarSource's
-cognitive complexity rules (a `switch` counts once, `else`/`else if` add 1 without
-nesting, each run of like `&&`/`||` adds 1, `??` and `?.` add nothing, folded
-callbacks nest their bodies). Rust and Python still charge each `match` arm and
-count physical lines until roadmap M5.
+and `band`. Code lines hold a token that is neither a comment nor a Python
+docstring; a function owns the code lines in its range outside named functions
+nested in it, and a file's lines are its code lines. Rust methods read
+`Type::method` and Python methods `Class.method`; closures and lambdas fold into
+their function.
+
+Cognitive complexity follows SonarSource 1.7 in every language: `if`, loops,
+`switch`/`match`, `catch`/`except` and ternaries add 1 plus nesting (a `switch`
+counts once), `else`/`else if`/`elif` add 1 without nesting, each run of like
+`&&`/`||`/`and`/`or` adds 1, `??`, `?.` and Rust `?` add nothing, labelled jumps add
+1, and folded callbacks nest their bodies. Deviations: recursion is not counted,
+named nested functions are their own units, JavaScript's "declarative outer
+function" exemption is not applied, and Rust macro bodies are not measured.
+eslint-plugin-sonarjs 4.2.2 agrees exactly on 88% of corpus functions and on the
+band of 99%; it scores callbacks separately, ignores `||` runs and exempts JSX
+`&&`, so its numbers are lower by design.
 
 Relative imports resolve existing TypeScript and JavaScript files and directory
 indexes. Package imports and tsconfig aliases remain unresolved. This is
 a structural assessment, not TypeScript type checking or React hook-rule linting.
-The Python fallback remains approximate.
 
 # Development checks
 
@@ -62,11 +71,11 @@ The Python fallback remains approximate.
 targets, unit tests, CLI integration tests, and the TypeScript smoke test.
 The integration suite extracts this project's `src` directory and enforces:
 
-- every file has a module description, at most 400 lines and no parse errors;
+- every file has a module description, at most 400 code lines and no parse errors;
 - no function is red, and the share of function lines in yellow functions stays
   within `MAX_YELLOW_PER_MILLE`;
-- `src` stays within the project budget in `tests/cli.rs`: files, total lines
-  and dependencies;
+- `src` stays within the project budget in `tests/cli.rs`: files, total code
+  lines and dependencies;
 - `tests/fixtures/typescript/basic.jsonl` pins the extract record shapes.
 
 Complexity limits apply to functions only. File totals mostly measure size, and

@@ -39,35 +39,35 @@ pub fn print(headers: &[String], rows: &[Row], colour: bool, separate_files: boo
     let middle = border("├", "┼", "┤");
     let bottom = border("└", "┴", "┘");
     println!("{top}");
-    println!(
-        "│ {} │",
-        headers
-            .iter()
-            .enumerate()
-            .map(|(i, h)| format!("{h:<width$}", width = widths[i]))
-            .collect::<Vec<_>>()
-            .join(" │ ")
-    );
+    let header: Vec<_> = (headers.iter().zip(&widths))
+        .map(|(header, width)| format!("{header:<width$}"))
+        .collect();
+    println!("│ {} │", header.join(" │ "));
     println!("{middle}");
-    for (row_index, (label, values, file_start)) in rows.iter().enumerate() {
-        if separate_files && row_index > 0 && *file_start {
+    for (row_index, row) in rows.iter().enumerate() {
+        if separate_files && row_index > 0 && row.2 {
             println!("{middle}");
         }
-        let mut cells = vec![truncate_left(label, widths[0])];
-        for (i, (value, colour_code)) in values.iter().enumerate() {
-            let padded = format!("{value:>width$}", width = widths[i + 1]);
-            cells.push(if colour {
-                format!("{colour_code}{padded}{RESET}")
-            } else {
-                padded
-            });
-        }
-        while cells.len() < widths.len() {
-            cells.push(" ".repeat(widths[cells.len()]));
-        }
-        println!("│ {} │", cells.join(" │ "));
+        println!("│ {} │", cells(row, &widths, colour).join(" │ "));
     }
     println!("{bottom}");
+}
+
+/// Formats one row to the column widths, colouring metric values when asked.
+fn cells((label, values, _): &Row, widths: &[usize], colour: bool) -> Vec<String> {
+    let mut cells = vec![truncate_left(label, widths[0])];
+    for (i, (value, colour_code)) in values.iter().enumerate() {
+        let padded = format!("{value:>width$}", width = widths[i + 1]);
+        cells.push(if colour {
+            format!("{colour_code}{padded}{RESET}")
+        } else {
+            padded
+        });
+    }
+    while cells.len() < widths.len() {
+        cells.push(" ".repeat(widths[cells.len()]));
+    }
+    cells
 }
 
 /// Fits the label column around the space required by metric values.

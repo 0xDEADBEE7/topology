@@ -1,6 +1,6 @@
 # Roadmap: React support first, then one tree-sitter walker
 
-Status (October 2026): M0–M4 done.
+Status (October 2026): M0–M5 done.
 
 - The stash/fig scripts and their Make targets live in the untracked `.local/scripts/`
   (included by the Makefile when present).
@@ -37,9 +37,27 @@ Status (October 2026): M0–M4 done.
   `tests/` (not a separate `tests/languages.rs`). M4 removed only 10 lines, not the
   planned 80–120: the syntax table and `Language` methods cost about what the adapter
   layer saved, so the reduction now rests on M5 deleting syn and the Python heuristic.
-- Python and Rust still score the Docs column with their own heuristics until M5.
-- Size: `src` is 27 files and 2,289 lines with no test code. Budget 27 files, 2,314
-  lines; yellow share 0‰.
+- M3 review fixes (landed with M5): a wrapper call names only a callback with no function
+  or call before it (4 excalidraw `memo` comparators had taken their component's name and
+  turned red), callee names elide arguments (`describe.each(…)("adds %i")`, 68 multi-line
+  names down to 4), parameter defaults are measured, `else` before a comment still reads
+  as `else if`, computed keys fold, `path::symbol` prefers an exact name, and outline depth
+  ignores equal ranges. eslint-plugin-sonarjs 4.2.2 cross-check: 80.4% exact and 97.9% same
+  band on 1,135 sample functions (88.1% / 98.7% on 15,364 corpus functions); every
+  difference comes from sonarjs scoring callbacks separately, ignoring `||` runs and
+  exempting JSX `&&`, where topo follows the whitepaper.
+- M5 verify: one tree-sitter walker measures Rust, Python, TS/TSX and JS from tables in
+  `src/lang.rs`; syn, proc-macro2, the Rust visitors and the Python line heuristic are
+  gone. requests vs Python's `ast`: 711/711 names, 709/711 exact spans (the 2 others end
+  at trailing comments), 711/711 docstrings. ripgrep: 2,977 functions (was 2,914), Rust
+  methods named `Type::method`; topo's own function list matches M4 once the prefix is
+  stripped. Lines are code lines everywhere (bands 40/75). TS/JS cognitive scores and
+  names are unchanged by the walker rewrite. Binary 5.18 MB; clean release build 10.5 s
+  (was 13.3 s). M5 removed 135 physical lines net (176 before the M3 fixes), short of
+  the planned 260–320: the Rust and Python tables and code-line counting cost about
+  100 lines of what syn and the heuristic freed.
+- Size: `src` is 22 files, 2,154 physical and 1,832 code lines, all green. Budget 22
+  files and 1,857 code lines; yellow share 0‰.
 
 ## 1. Recommendation
 
@@ -110,8 +128,9 @@ The flags `--metrics`, `--all-metrics` and `--functions` are removed too.
 - `??`, `?.` and Rust `?` add nothing.
 - A labelled `break` or `continue` adds +1.
 - Unnamed callbacks, lambdas and closures folded into their parent add nesting only.
-- Documented deviations from Sonar: no increment for recursion, and code inside macro
-  bodies is not measured.
+- Documented deviations from Sonar: no increment for recursion, named nested functions
+  are their own units, JavaScript's "declarative outer function" exemption is not
+  applied, and code inside macro bodies is not measured.
 
 **Shown but never rated:**
 - Per file: lines, module doc yes/no, and a `~` marker for partially parsed files, followed

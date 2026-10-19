@@ -10,41 +10,31 @@ pub(super) fn resolve_import(
     language: &str,
     source: &str,
 ) -> Option<String> {
-    let candidates = if language == "rust" {
-        let module = source.strip_prefix("crate::")?.split("::").next()?;
-        vec![
-            root.join("src").join(format!("{module}.rs")),
-            root.join("src").join(module).join("mod.rs"),
-        ]
-    } else if language == "python" {
-        let module = source
-            .rsplit_once('.')
-            .map_or(source, |(module, _)| module)
-            .replace('.', "/");
-        let base = root.join(Path::new(&module));
-        vec![base.with_extension("py"), base.join("__init__.py")]
-    } else if language == "typescript" || language == "javascript" {
-        if !source.starts_with('.') {
-            return None;
+    let candidates = match language {
+        "rust" => {
+            let module = source.strip_prefix("crate::")?.split("::").next()?;
+            let src = root.join("src");
+            vec![
+                src.join(format!("{module}.rs")),
+                src.join(module).join("mod.rs"),
+            ]
         }
-        let base = Path::new(current)
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join(source);
-        script_candidates(&root.join(base))
-    } else {
-        return None;
+        "python" => {
+            let module = source.rsplit_once('.').map_or(source, |(module, _)| module);
+            let base = root.join(Path::new(&module.replace('.', "/")));
+            vec![base.with_extension("py"), base.join("__init__.py")]
+        }
+        "typescript" | "javascript" if source.starts_with('.') => {
+            let directory = Path::new(current).parent().unwrap_or(Path::new("."));
+            script_candidates(&root.join(directory.join(source)))
+        }
+        _ => return None,
     };
     candidates.into_iter().find_map(|candidate| {
-        candidate
+        let path = candidate
             .is_file()
-            .then(|| candidate.canonicalize().ok())
-            .flatten()
-            .and_then(|path| {
-                path.strip_prefix(root)
-                    .ok()
-                    .map(|p| p.to_string_lossy().to_string())
-            })
+            .then(|| candidate.canonicalize().ok())??;
+        Some(path.strip_prefix(root).ok()?.to_string_lossy().to_string())
     })
 }
 

@@ -6,36 +6,13 @@ use crate::{
 };
 use tree_sitter::{Node, Parser};
 
+const NOTHING: &[&str] = &[];
+const BODY: &[&str] = &["body"];
+
 /// Measures one source file, warning when only part of it could be parsed.
 pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
     let language = Language::from_path(path).ok_or_else(|| unsupported(path))?;
-    let metrics = match language {
-        Language::Rust => crate::visit::analyse(path, source)?,
-        Language::Python => crate::python::analyse_text(language.name(), path, source),
-        _ => parse(language, path, source)?,
-    };
-    if metrics.parse_errors > 0 {
-        eprintln!(
-            "warning: {path}: syntax errors: {}; measured the recoverable code",
-            metrics.parse_errors
-        );
-    }
-    Ok(metrics)
-}
-
-fn unsupported(path: &str) -> String {
-    match std::path::Path::new(path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-    {
-        Some(extension) => format!("unsupported language: .{extension}"),
-        None => "cannot determine language: file has no extension".to_owned(),
-    }
-}
-
-/// Parses with the language's grammar, recovering from syntax errors, and measures each unit.
-fn parse(language: Language, path: &str, source: &str) -> Result<FileMetrics, String> {
-    let (grammar, spec) = language.grammar().ok_or("no grammar for this language")?;
+    let (grammar, spec) = language.grammar();
     let mut parser = Parser::new();
     parser
         .set_language(&grammar)
@@ -46,19 +23,35 @@ fn parse(language: Language, path: &str, source: &str) -> Result<FileMetrics, St
     let mut walker = Walker {
         spec,
         source: source.as_bytes(),
+        code: vec![false; source.lines().count() + 1],
         fns: Vec::new(),
+        nested: Vec::new(),
         classes: Vec::new(),
     };
-    walker.collect(tree.root_node(), None);
+    walker.walk(tree.root_node(), None, 0);
+    let parse_errors = syntax_errors(tree.root_node());
+    if parse_errors > 0 {
+        eprintln!("warning: {path}: syntax errors: {parse_errors}; measured the recoverable code");
+    }
     Ok(FileMetrics {
         language: language.name(),
         path: path.to_owned(),
-        loc: source.lines().count(),
+        loc: walker.code.iter().filter(|code| **code).count(),
         has_docstring: crate::extract::module_doc(source).is_some(),
-        parse_errors: syntax_errors(tree.root_node()),
-        fns: walker.fns,
+        parse_errors,
+        fns: walker.units(),
         classes: walker.classes,
     })
+}
+
+fn unsupported(path: &str) -> String {
+    match std::path::Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+    {
+        Some(extension) => format!("unsupported language: .{extension}"),
+        None => "cannot determine language: file has no extension".to_owned(),
+    }
 }
 
 /// Counts the ERROR and MISSING nodes left by tree-sitter's error recovery.
@@ -74,44 +67,152 @@ fn syntax_errors(node: Node<'_>) -> usize {
         .sum()
 }
 
-/// Walks one syntax tree using its language's table, collecting units and classes.
+/// Walks one syntax tree using its language's table, collecting units, classes and code.
 struct Walker<'a> {
     spec: &'static Spec,
     source: &'a [u8],
+    /// Whether each row holds code: a token that is neither a comment nor a docstring.
+    code: Vec<bool>,
     fns: Vec<FnMetrics>,
+    /// Line ranges of the named units nested directly in each unit.
+    nested: Vec<Vec<(usize, usize)>>,
     classes: Vec<ClassMetrics>,
 }
 
 impl Walker<'_> {
-    /// Collects named functions as units below `parent`, folding unnamed callbacks into it.
-    fn collect(&mut self, node: Node<'_>, parent: Option<usize>) {
-        let mut parent = parent;
-        if self.spec.classes.contains(&node.kind()) {
+    /// Visits a node inside `unit`: opens named units, folds unnamed callbacks, and adds
+    /// cognitive increments and code rows to the unit that owns them.
+    fn walk(&mut self, node: Node<'_>, unit: Option<usize>, nesting: u32) {
+        let kind = node.kind();
+        if self.spec.comments.contains(&kind) || self.is_docstring(node) {
+            return;
+        }
+        if node.child_count() == 0 {
+            return self.mark_code(node);
+        }
+        if self.spec.classes.contains(&kind) {
             self.classes.push(ClassMetrics {
                 name: self.class_name(node),
                 line_start: node.start_position().row + 1,
                 line_end: node.end_position().row + 1,
             });
-        } else if let Some(name) = self
-            .is_function(node)
-            .then(|| self.unit_name(node, parent.is_some()))
-            .flatten()
-        {
-            let unit = self.unit(node, name);
-            if let Some(index) = parent {
-                self.fns[index].nested_lines += unit.line_end + 1 - unit.line_start;
-            }
-            self.fns.push(unit);
-            parent = Some(self.fns.len() - 1);
         }
+        let function = self.spec.functions.contains(&kind);
+        let named = function
+            .then(|| self.unit_name(node, unit.is_some()))
+            .flatten();
+        let (unit, nesting, nested) = if let Some(name) = named {
+            (Some(self.open(node, name, unit)), 0, NOTHING)
+        } else if function || self.spec.closures.contains(&kind) {
+            (unit, nesting, BODY)
+        } else {
+            (unit, nesting, self.rate(node, unit, nesting))
+        };
         let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            self.collect(child, parent);
+        let mut more = cursor.goto_first_child();
+        while more {
+            let deeper = nested.contains(&cursor.field_name().unwrap_or(""));
+            self.walk(cursor.node(), unit, nesting + u32::from(deeper));
+            more = cursor.goto_next_sibling();
         }
     }
 
-    fn is_function(&self, node: Node<'_>) -> bool {
-        self.spec.functions.contains(&node.kind())
+    /// Adds a node's cognitive increment to its unit and returns the fields it nests deeper.
+    fn rate(
+        &mut self,
+        node: Node<'_>,
+        unit: Option<usize>,
+        nesting: u32,
+    ) -> &'static [&'static str] {
+        let (increment, nested) = self.increment(node, nesting);
+        if let Some(index) = unit {
+            self.fns[index].cognitive += increment;
+        }
+        nested
+    }
+
+    /// Starts a named unit; its lines then no longer count for the unit containing it.
+    fn open(&mut self, node: Node<'_>, name: String, parent: Option<usize>) -> usize {
+        let declaration = self.declaration(node);
+        let lines = (
+            declaration.start_position().row + 1,
+            node.end_position().row + 1,
+        );
+        if let Some(parent) = parent {
+            self.nested[parent].push(lines);
+        }
+        self.fns.push(FnMetrics {
+            name,
+            line_start: lines.0,
+            line_end: lines.1,
+            loc: 0,
+            cognitive: 0,
+            has_docstring: self.documented(node, declaration),
+        });
+        self.nested.push(Vec::new());
+        self.fns.len() - 1
+    }
+
+    /// Counts each unit's code lines, leaving out the lines of named units nested in it.
+    fn units(&mut self) -> Vec<FnMetrics> {
+        for (unit, nested) in self.fns.iter_mut().zip(&self.nested) {
+            let owned = |row: &usize| {
+                !nested
+                    .iter()
+                    .any(|(start, end)| (start..=end).contains(&row))
+            };
+            let rows = (unit.line_start..=unit.line_end).filter(owned);
+            unit.loc = rows
+                .filter(|row| self.code.get(row - 1) == Some(&true))
+                .count();
+        }
+        std::mem::take(&mut self.fns)
+    }
+
+    /// Marks the rows where a token has visible text as code.
+    fn mark_code(&mut self, token: Node<'_>) {
+        let text = token.utf8_text(self.source).unwrap_or_default();
+        for (offset, line) in text.split('\n').enumerate() {
+            let row = self.code.get_mut(token.start_position().row + offset);
+            if let Some(code) = row.filter(|_| !line.trim().is_empty()) {
+                *code = true;
+            }
+        }
+    }
+
+    /// Recognizes a bare string statement, which documents rather than computes.
+    fn is_docstring(&self, node: Node<'_>) -> bool {
+        self.spec.docs.is_empty()
+            && node.kind() == "expression_statement"
+            && node.named_child_count() == 1
+            && node
+                .named_child(0)
+                .is_some_and(|child| child.kind() == "string")
+    }
+
+    /// Finds a doc comment or attribute above the declaration, or a docstring opening the body.
+    fn documented(&self, node: Node<'_>, declaration: Node<'_>) -> bool {
+        if self.spec.docs.is_empty() {
+            let mut cursor = node.walk();
+            let body = node.child_by_field_name("body");
+            let first =
+                body.and_then(|body| body.named_children(&mut cursor).find(|s| !s.is_extra()));
+            return first.is_some_and(|statement| self.is_docstring(statement));
+        }
+        let mut sibling = declaration.prev_named_sibling();
+        while let Some(node) = sibling {
+            let text = node.utf8_text(self.source).unwrap_or_default();
+            if self.spec.docs.iter().any(|doc| text.starts_with(doc))
+                && !text.starts_with("#[doc(hidden")
+            {
+                return true;
+            }
+            if !self.spec.attributes.contains(&node.kind()) {
+                return false;
+            }
+            sibling = node.prev_named_sibling();
+        }
+        false
     }
 
     /// Names a function by itself, its binding, or its test block; None folds a nested callback.
@@ -127,13 +228,15 @@ impl Walker<'_> {
 
     /// Follows wrappers (and, at the top level, any call) up to the binding that names `node`.
     fn bound_name(&self, node: Node<'_>, nested: bool) -> Option<String> {
-        let mut current = node.parent()?;
+        let (mut child, mut current) = (node, node.parent()?);
         loop {
-            let call = current.parent().filter(|_| current.kind() == "arguments");
+            let call = current
+                .parent()
+                .filter(|_| self.passes_arguments(current, child));
             if self.spec.wrappers.contains(&current.kind()) {
-                current = current.parent()?;
+                (child, current) = (current, current.parent()?);
             } else if let Some(call) = call.filter(|call| !nested || self.is_wrapper_call(*call)) {
-                current = call.parent()?;
+                (child, current) = (call, call.parent()?);
             } else {
                 break;
             }
@@ -146,8 +249,9 @@ impl Walker<'_> {
             .bindings
             .iter()
             .find(|(kind, _)| *kind == current.kind())?;
-        let name = self.text(current.child_by_field_name(field)?)?;
-        let name = name.rsplit('.').next()?.trim_matches(['"', '\'']);
+        let name = current.child_by_field_name(field)?;
+        let name = self.text(name.child_by_field_name("property").unwrap_or(name))?;
+        let name = name.trim_matches(['"', '\'']);
         let simple = !name.is_empty() && !name.contains(['{', '[', ' ']);
         simple.then(|| self.qualify(current, name.to_owned()))
     }
@@ -160,8 +264,10 @@ impl Walker<'_> {
         let label = (arguments.named_child(0)).filter(|first| {
             first.id() != node.id() && matches!(first.kind(), "string" | "template_string")
         })?;
-        let callee = self.text(arguments.parent()?.child_by_field_name("function")?)?;
-        Some(format!("{callee}({})", self.text(label)?))
+        let callee = self.callee(arguments.parent()?.child_by_field_name("function")?)?;
+        let label = self.text(label)?;
+        let label = label.lines().map(str::trim).collect::<Vec<_>>().join(" ");
+        Some(format!("{callee}({label})"))
     }
 
     /// Names a top-level callback after the call that receives it.
@@ -169,27 +275,57 @@ impl Walker<'_> {
         let call = node.parent().filter(|parent| parent.kind() == "arguments");
         let callee = call.and_then(|call| call.parent()?.child_by_field_name("function"));
         callee
-            .and_then(|callee| self.text(callee))
+            .and_then(|callee| self.callee(callee))
             .map_or_else(|| "<anonymous>".to_owned(), |callee| format!("{callee}(…)"))
     }
 
-    /// Prefixes members of a class body with the class name, as in `View.render`.
+    /// Renders a callee without its arguments, as in `describe.each(…)` or `app.get`.
+    fn callee(&self, node: Node<'_>) -> Option<String> {
+        let field = |name| node.child_by_field_name(name);
+        match node.kind() {
+            "call_expression" => Some(format!("{}(…)", self.callee(field("function")?)?)),
+            "member_expression" => {
+                let object = self.callee(field("object")?)?;
+                Some(format!("{object}.{}", self.text(field("property")?)?))
+            }
+            _ => self.text(node),
+        }
+    }
+
+    /// Whether `child` is a callback its call binds: no function or call argument precedes it.
+    fn passes_arguments(&self, arguments: Node<'_>, child: Node<'_>) -> bool {
+        let mut cursor = arguments.walk();
+        let mut earlier =
+            (arguments.named_children(&mut cursor)).take_while(|a| a.id() != child.id());
+        arguments.kind() == "arguments"
+            && !earlier
+                .any(|a| self.spec.functions.contains(&a.kind()) || a.kind() == "call_expression")
+    }
+
+    /// Prefixes a container's members with its name, as in `View.render` or `Type::method`.
     fn qualify(&self, member: Node<'_>, name: String) -> String {
-        let class = member
-            .parent()
-            .filter(|parent| parent.kind() == "class_body")
-            .and_then(|body| body.parent());
-        match class {
-            Some(class) => format!("{}.{name}", self.class_name(class)),
+        let mut scope = member.parent();
+        while let Some(node) = scope.filter(|node| self.spec.members.contains(&node.kind())) {
+            scope = node.parent();
+        }
+        match scope.filter(|scope| self.spec.scopes.contains(&scope.kind())) {
+            Some(scope) => format!("{}{}{name}", self.class_name(scope), self.spec.separator),
             None => name,
         }
     }
 
+    /// Names a class or container by itself, its implemented type, or its binding.
     fn class_name(&self, class: Node<'_>) -> String {
-        let own = class
-            .child_by_field_name("name")
-            .and_then(|name| self.text(name));
-        own.or_else(|| self.bound_name(class, true))
+        let field = |name| {
+            class
+                .child_by_field_name(name)
+                .and_then(|node| self.text(node))
+        };
+        let implemented =
+            || field("type").map(|t| t.split('<').next().unwrap_or_default().to_owned());
+        field("name")
+            .or_else(implemented)
+            .or_else(|| self.bound_name(class, true))
             .unwrap_or_else(|| "<anonymous>".to_owned())
     }
 
@@ -197,28 +333,13 @@ impl Walker<'_> {
         node.utf8_text(self.source).ok().map(str::to_owned)
     }
 
-    /// Measures a unit's body, retaining the extent of the statement that declares it.
-    fn unit(&self, node: Node<'_>, name: String) -> FnMetrics {
-        let declaration = self.declaration(node);
-        let body = node.child_by_field_name("body");
-        FnMetrics {
-            name,
-            line_start: declaration.start_position().row + 1,
-            line_end: node.end_position().row + 1,
-            cognitive: body.map_or(0, |body| self.cognitive(body, 0)),
-            has_docstring: declaration.prev_named_sibling().is_some_and(|sibling| {
-                sibling.kind() == "comment"
-                    && self.text(sibling).is_some_and(|doc| doc.starts_with("/**"))
-            }),
-            nested_lines: 0,
-        }
-    }
-
     /// Follows wrappers and declarations so a unit starts where its JSDoc attaches.
     fn declaration<'t>(&self, mut node: Node<'t>) -> Node<'t> {
         while let Some(parent) = node.parent() {
             let kind = parent.kind();
-            if !(self.spec.wrappers.contains(&kind) || self.spec.declarations.contains(&kind)) {
+            let through =
+                self.spec.wrappers.contains(&kind) || self.spec.declarations.contains(&kind);
+            if !through || (kind == "arguments" && !self.passes_arguments(parent, node)) {
                 break;
             }
             node = parent;
@@ -237,47 +358,40 @@ impl Walker<'_> {
         name.is_some_and(|name| self.spec.wrapper_calls.contains(&name))
     }
 
-    /// Sums a body's cognitive complexity; named nested functions are measured separately.
-    fn cognitive(&self, node: Node<'_>, nesting: u32) -> u32 {
-        let structure = self
-            .spec
+    /// Rates structures, `if`/`else`, labelled jumps and logical runs, with the fields they nest.
+    fn increment(&self, node: Node<'_>, nesting: u32) -> (u32, &'static [&'static str]) {
+        let (spec, kind) = (self.spec, node.kind());
+        if let Some((_, nested)) = spec
             .structures
             .iter()
-            .find(|(kind, _)| *kind == node.kind());
-        let rule = structure.map(|(_, nested)| (1 + nesting, *nested));
-        let Some((mut total, nested)) = rule.or_else(|| self.increment(node, nesting)) else {
-            return 0;
-        };
-        let mut cursor = node.walk();
-        let mut more = cursor.goto_first_child();
-        while more {
-            let deeper = nested.contains(&cursor.field_name().unwrap_or(""));
-            if cursor.node().is_named() {
-                total += self.cognitive(cursor.node(), nesting + u32::from(deeper));
-            }
-            more = cursor.goto_next_sibling();
+            .find(|(structure, _)| *structure == kind)
+        {
+            return (1 + nesting, *nested);
         }
-        total
-    }
-
-    /// Rates functions, `if`/`else`, labelled jumps and logical runs; None skips a nested unit.
-    fn increment(&self, node: Node<'_>, nesting: u32) -> Option<(u32, &'static [&'static str])> {
-        let [if_kind, else_kind] = self.spec.conditional;
-        let kind = node.kind();
+        let [if_kind, else_kind] = spec.conditional;
         let parent_is = |kind| node.parent().is_some_and(|p| p.kind() == kind);
-        let first_is = |kind| node.named_child(0).is_some_and(|c| c.kind() == kind);
-        Some(match kind {
-            _ if self.is_function(node) && self.unit_name(node, true).is_some() => return None,
-            _ if self.is_function(node) => (0, &["body"]),
+        let first_is = |kind| {
+            let mut cursor = node.walk();
+            let mut statements = node.named_children(&mut cursor).filter(|c| !c.is_extra());
+            statements.next().is_some_and(|c| c.kind() == kind)
+        };
+        match kind {
             _ if kind == if_kind && parent_is(else_kind) => (1, &["consequence"]),
             _ if kind == if_kind => (1 + nesting, &["consequence"]),
-            _ if kind == else_kind && first_is(if_kind) => (0, &[]),
-            _ if kind == else_kind => (1, &[""]),
-            _ if self.spec.jumps.contains(&kind) => {
-                (u32::from(node.child_by_field_name("label").is_some()), &[])
-            }
-            _ => (self.logical_sequences(node), &[]),
-        })
+            _ if spec.elif.contains(&kind) => (1, &["consequence"]),
+            _ if kind == else_kind && first_is(if_kind) => (0, NOTHING),
+            _ if kind == else_kind => (1, &["", "body"]),
+            _ if spec.jumps.contains(&kind) => (u32::from(self.labelled(node)), NOTHING),
+            _ => (self.logical_sequences(node), NOTHING),
+        }
+    }
+
+    /// Recognizes a jump to a label, given as a field (TypeScript) or a child (Rust).
+    fn labelled(&self, jump: Node<'_>) -> bool {
+        jump.child_by_field_name("label").is_some()
+            || jump
+                .named_child(0)
+                .is_some_and(|child| child.kind() == "label")
     }
 
     /// Counts runs of like logical operators in the expression rooted here (`a && b || c` is 2).

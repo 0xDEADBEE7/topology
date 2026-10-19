@@ -97,9 +97,9 @@ fn extract_output_matches_its_contract() {
     );
 }
 
-/// Size budget for `src`: lower these as the code shrinks, never raise them to pass.
-const MAX_FILES: usize = 27;
-const MAX_LINES: u64 = 2_314;
+/// Size budget for `src` in files and code lines: lower it as the code shrinks, never raise it.
+const MAX_FILES: usize = 22;
+const MAX_LINES: u64 = 1_857;
 const MAX_DEPENDENCIES: usize = 6;
 /// Largest share of function lines in yellow functions, per mille; ratchets down.
 const MAX_YELLOW_PER_MILLE: u64 = 0;
@@ -190,7 +190,7 @@ fn project_meets_its_structural_quality_bands() {
         (1..=MAX_FILES).contains(&files),
         "{files} files over budget"
     );
-    assert!(lines <= MAX_LINES, "{lines} lines over budget");
+    assert!(lines <= MAX_LINES, "{lines} code lines over budget");
     let dependencies = include_str!("../Cargo.toml")
         .split("[dependencies]")
         .nth(1)

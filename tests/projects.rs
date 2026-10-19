@@ -290,7 +290,7 @@ fn tree_descriptions_skip_licenses_pragmas_and_headings() {
 fn bands_rate_lines_and_cognitive_at_their_boundaries() {
     let project = Project::new();
     let mut source = String::new();
-    for lines in [60, 61, 70, 71] {
+    for lines in [40, 41, 75, 76] {
         let body = "  x();\n".repeat(lines - 2);
         source += &format!("function lines{lines}() {{\n{body}}}\n");
     }
@@ -307,10 +307,10 @@ fn bands_rate_lines_and_cognitive_at_their_boundaries() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     for (name, band) in [
-        ("lines60", "green"),
-        ("lines61", "yellow"),
-        ("lines70", "yellow"),
-        ("lines71", "red"),
+        ("lines40", "green"),
+        ("lines41", "yellow"),
+        ("lines75", "yellow"),
+        ("lines76", "red"),
         ("cognitive10", "green"),
         ("cognitive11", "yellow"),
         ("cognitive15", "yellow"),

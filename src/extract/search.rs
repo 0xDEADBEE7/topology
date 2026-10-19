@@ -9,28 +9,20 @@ pub fn find(root: &str, query: &str) -> Result<Vec<SymbolInfo>, String> {
     let repo = repo_name(&root);
     let mut paths = Vec::new();
     crate::paths::collect(&root, &mut paths)?;
-    let mut matches = Vec::new();
-    for path in paths {
-        for value in file_records(&root, &repo, &path) {
-            if let Some(symbol) = symbol_info(&value) {
-                let path_name = format!("{}::{}", symbol.path, symbol.name);
-                if is_named(&symbol.name, query)
-                    || symbol.qualified_name == query
-                    || path_name == query
-                {
-                    matches.push(symbol);
-                }
-            }
-        }
-    }
+    let mut matches: Vec<_> = (paths.iter())
+        .flat_map(|path| file_records(&root, &repo, path))
+        .filter_map(|value| symbol_info(&value))
+        .filter(|symbol| {
+            is_named(&symbol.name, query)
+                || symbol.qualified_name == query
+                || format!("{}::{}", symbol.path, symbol.name) == query
+        })
+        .collect();
     matches.sort_by(|a, b| a.path.cmp(&b.path).then(a.lines[0].cmp(&b.lines[0])));
     Ok(matches)
 }
 
-/// Matches a symbol by its full name or, for members such as `View.render`, its last segment.
+/// Matches a symbol by its full name or by the last segment of `View.render` or `Type::method`.
 pub fn is_named(symbol: &str, query: &str) -> bool {
-    symbol == query
-        || symbol
-            .rsplit_once('.')
-            .is_some_and(|(_, member)| member == query)
+    symbol == query || symbol.rsplit(['.', ':']).next() == Some(query)
 }

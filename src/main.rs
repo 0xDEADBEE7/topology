@@ -4,12 +4,9 @@ mod extract;
 mod lang;
 mod metrics;
 mod paths;
-mod python;
 mod report;
 mod table;
 mod tree;
-mod visit;
-mod visitor;
 mod walk;
 
 use report::Options;

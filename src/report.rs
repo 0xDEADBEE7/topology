@@ -7,7 +7,7 @@ use crate::{
 use std::io::IsTerminal;
 
 /// Rated function metrics: name, largest green value, and largest yellow value.
-pub const BANDS: [(&str, usize, usize); 2] = [("Lines", 60, 70), ("Cognitive", 10, 15)];
+pub const BANDS: [(&str, usize, usize); 2] = [("Lines", 40, 75), ("Cognitive", 10, 15)];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 /// Status of a rated value; a function takes the worst band of its metrics.
@@ -41,7 +41,7 @@ impl Band {
 
 /// Rates a function by the worse of its lines and cognitive complexity bands.
 pub fn function_band(f: &FnMetrics) -> Band {
-    Band::of(f.loc(), BANDS[0]).max(Band::of(f.cognitive as usize, BANDS[1]))
+    Band::of(f.loc, BANDS[0]).max(Band::of(f.cognitive as usize, BANDS[1]))
 }
 
 /// Controls function detail, the guide, and terminal colour.
@@ -86,7 +86,7 @@ pub fn print_table(files: &[FileMetrics], options: &Options) {
 }
 
 fn function_cells(f: &FnMetrics) -> Vec<(String, &'static str)> {
-    let (loc, cog) = (f.loc(), f.cognitive as usize);
+    let (loc, cog) = (f.loc, f.cognitive as usize);
     vec![
         (loc.to_string(), Band::of(loc, BANDS[0]).colour()),
         (cog.to_string(), Band::of(cog, BANDS[1]).colour()),
@@ -105,10 +105,10 @@ fn doc(present: bool) -> (String, &'static str) {
 /// Summarizes the risk profile, documentation coverage, and partially parsed files.
 fn summary(files: &[FileMetrics]) -> String {
     let fns: Vec<&FnMetrics> = files.iter().flat_map(|file| &file.fns).collect();
-    let lines = fns.iter().map(|f| f.loc()).sum::<usize>().max(1) as f64;
+    let lines = fns.iter().map(|f| f.loc).sum::<usize>().max(1) as f64;
     let count_and_share = |band| {
         let banded: Vec<_> = fns.iter().filter(|f| function_band(f) == band).collect();
-        let share = 100.0 * banded.iter().map(|f| f.loc()).sum::<usize>() as f64 / lines;
+        let share = 100.0 * banded.iter().map(|f| f.loc).sum::<usize>() as f64 / lines;
         (banded.len(), share)
     };
     let (yellow, yellow_share) = count_and_share(Band::Yellow);

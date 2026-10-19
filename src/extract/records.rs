@@ -13,11 +13,7 @@ pub(super) fn records(
     path: &Path,
 ) -> Result<Vec<serde_json::Value>, String> {
     let source = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .to_string();
+    let relative = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
     let relative = relative.strip_prefix("./").unwrap_or(&relative).to_owned();
     let analysed = crate::walk::analyse(&relative, &source)?;
     let language = analysed.language;
@@ -37,15 +33,9 @@ pub(super) fn records(
             &relative, repo, language, &source, function, "function",
         )?);
     }
+    let kind = metadata::class_kind(language);
     for class in &analysed.classes {
-        output.push(symbol(
-            &relative,
-            repo,
-            language,
-            &source,
-            class,
-            metadata::class_kind(language),
-        )?);
+        output.push(symbol(&relative, repo, language, &source, class, kind)?);
     }
     unique_ids(&mut output);
     Ok(output)
