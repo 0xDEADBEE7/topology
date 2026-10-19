@@ -267,43 +267,56 @@ impl Walker<'_> {
                 let object = self.callee(field("object")?)?;
                 Some(format!("{object}.{}", self.text(field("property")?)?))
             }
-            _ => self.text(node),
+            _ => self
+                .text(node)
+                .filter(|text| !text.contains('\n'))
+                .or(Some("…".to_owned())),
         }
     }
 
-    /// Whether `child` is a callback its call binds: no function or call argument precedes it.
+    /// Whether `child` is a callback its call binds: the first argument of a wrapper call, or
+    /// one that no function or call argument precedes.
     fn passes_arguments(&self, arguments: Node<'_>, child: Node<'_>) -> bool {
         let mut cursor = arguments.walk();
         let mut earlier =
             (arguments.named_children(&mut cursor)).take_while(|a| a.id() != child.id());
+        let wrapper = arguments
+            .parent()
+            .is_some_and(|call| self.is_wrapper_call(call));
         arguments.kind() == "arguments"
+            && !(wrapper && earlier.next().is_some())
             && !earlier
                 .any(|a| self.spec.functions.contains(&a.kind()) || a.kind() == "call_expression")
     }
 
-    /// Prefixes a container's members with its name, as in `View.render` or `Type::method`.
+    /// Prefixes a member with its containers up to the nearest function, as in `View.render`,
+    /// `Type::method` or `Outer.Inner.method`.
     fn qualify(&self, member: Node<'_>, name: String) -> String {
-        let mut scope = member.parent();
-        while let Some(node) = scope.filter(|node| self.spec.members.contains(&node.kind())) {
-            scope = node.parent();
-        }
-        match scope.filter(|scope| self.spec.scopes.contains(&scope.kind())) {
-            Some(scope) => format!("{}{}{name}", self.class_name(scope), self.spec.separator),
+        let spec = self.spec;
+        let stops = [spec.functions, spec.closures, spec.scopes];
+        let mut ancestors = std::iter::successors(member.parent(), |node| node.parent());
+        let scope = ancestors.find(|node| stops.iter().any(|kinds| kinds.contains(&node.kind())));
+        match scope.filter(|scope| spec.scopes.contains(&scope.kind())) {
+            Some(scope) => format!("{}{}{name}", self.class_name(scope), spec.separator),
             None => name,
         }
     }
 
-    /// Names a class or container by itself, its implemented type, or its binding.
+    /// Names a class or container by itself (qualified), its implemented type's own name, or
+    /// its binding.
     fn class_name(&self, class: Node<'_>) -> String {
         let field = |name| {
             class
                 .child_by_field_name(name)
                 .and_then(|node| self.text(node))
         };
-        let implemented =
-            || field("type").map(|t| t.split('<').next().unwrap_or_default().to_owned());
-        field("name")
-            .or_else(implemented)
+        let implemented = || {
+            let path = field("type")?;
+            let path = path.split('<').next()?.rsplit([':', ' ', '&']).next()?;
+            Some(path.to_owned())
+        };
+        let own = field("name").or_else(implemented);
+        own.map(|name| self.qualify(class, name))
             .or_else(|| self.bound_name(class, true))
             .unwrap_or_else(|| "<anonymous>".to_owned())
     }

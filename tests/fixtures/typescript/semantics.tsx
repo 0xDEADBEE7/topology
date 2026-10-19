@@ -92,3 +92,11 @@ it.each([
 ])("picks %#", ({ pick }) => {
   expect(pick(1)).toBeTruthy();
 });
+
+const RowBase = ({ id }: { id: string }) => <li>{id}</li>;
+export const Row = memo(RowBase, (prev, next) => prev.id === next.id);
+
+[
+  "a",
+  "b",
+].forEach((code) => console.log(code));

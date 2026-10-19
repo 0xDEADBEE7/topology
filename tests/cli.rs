@@ -99,11 +99,18 @@ fn react_semantics_name_fold_and_rate_functions() {
             ("stream.on(…).on(\"end\")", 3, 0),
             ("pick", 1, 0),
             ("it.each(…)(\"picks %#\")", 4, 0),
+            ("RowBase", 1, 0),
+            ("memo(…)", 1, 0),
+            ("….forEach(…)", 1, 0),
         ],
+    );
+    assert!(
+        !functions.iter().any(|r| r["name"] == "Row"),
+        "a comparator is not Row"
     );
     assert_eq!(
         functions.len(),
-        20,
+        23,
         "callbacks must fold, not appear as <anonymous>"
     );
     let ids: std::collections::HashSet<_> = records.iter().map(|r| &r["id"]).collect();
@@ -127,11 +134,13 @@ fn rust_and_python_semantics_name_and_rate_functions() {
             ("Shape::fmt", 3, 0),
             ("new", 3, 0),
             ("usage", 5, 0),
+            ("Shape::area", 3, 0),
         ],
     );
     assert_eq!(documented(path), ["sum_of_primes", "Shape::new"]);
     assert!(topo(&[&format!("{path}::Shape::new")]).contains("pub fn new() -> Self {"));
     assert!(topo(&[&format!("{path}::new")]).contains("fn new() -> Shape {"));
+    assert!(topo(&[&format!("{path}::Shape::area")]).contains("fn area(&self) -> u32 {"));
     let path = "tests/fixtures/python/semantics.py";
     assert_units(
         &records(path),
@@ -141,10 +150,13 @@ fn rust_and_python_semantics_name_and_rate_functions() {
             ("mixed", 8, 8),
             ("Shape.area", 5, 1),
             ("page", 6, 0),
+            ("Popen._execute_child", 2, 0),
+            ("Popen.Inner.deep", 2, 0),
         ],
     );
     assert_eq!(documented(path), ["sum_of_primes", "Shape.area"]);
     assert!(topo(&[&format!("{path}::Shape.area")]).contains("def area(self):"));
+    assert!(topo(&[&format!("{path}::Popen.Inner.deep")]).contains("def deep(self):"));
 }
 
 /// Pins the extract record shapes; regenerate basic.jsonl only for a deliberate change.

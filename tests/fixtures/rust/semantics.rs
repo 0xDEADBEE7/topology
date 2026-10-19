@@ -73,3 +73,9 @@ fn usage() -> &'static str {
 usage: topo
 "#
 }
+
+impl Area for &'static Shape {
+    fn area(&self) -> u32 {
+        1
+    }
+}

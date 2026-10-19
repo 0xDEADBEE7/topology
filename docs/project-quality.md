@@ -11,7 +11,7 @@ cargo run --quiet -- extract /path/to/project
 Supported extensions are `.rs`, `.py`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
 `.jsx`, `.mjs`, and `.cjs`. TypeScript and TSX use separate grammars; JavaScript
 uses the TSX grammar. React components are named by their bindings (including
-through `forwardRef` and `memo`), class members read `Class.method`, test
+through the first argument of `forwardRef` and `memo`), class members read `Class.method`, test
 callbacks become units such as `it("undoes")`, and other unnamed callbacks fold
 into the function that contains them. Assessment
 does not require installing or executing the target project's dependencies.
@@ -51,7 +51,8 @@ call, or test call with its table) to the end of its body, but a callback passed
 to a method, as in `items.filter(...)`, starts at its arguments. Each code line
 belongs to the smallest range holding it, so functions never share lines, and a
 file's lines are its code lines. Rust methods read
-`Type::method` and Python methods `Class.method`; closures and lambdas fold into
+`Type::method` with the implemented type's own name, and Python methods
+`Class.method` (`Outer.Inner.method` when nested); closures and lambdas fold into
 their function.
 
 Cognitive complexity follows SonarSource 1.7 in every language: `if`, loops,

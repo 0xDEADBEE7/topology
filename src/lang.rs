@@ -69,8 +69,6 @@ pub struct Spec {
     pub classes: &'static [&'static str],
     /// Containers that qualify their members, as in `View.render` or `Type::method`.
     pub scopes: &'static [&'static str],
-    /// Nodes between a container and its members.
-    pub members: &'static [&'static str],
     /// Joins a container's name to a member's.
     pub separator: &'static str,
     /// Structures that add 1 plus nesting, with the fields nested one level deeper.
@@ -113,7 +111,6 @@ const ECMA: Spec = Spec {
     closures: &[],
     classes: &["class_declaration", "abstract_class_declaration", "class"],
     scopes: &["class_declaration", "abstract_class_declaration", "class"],
-    members: &["class_body"],
     separator: ".",
     structures: &[
         ("switch_statement", &["body"]),
@@ -167,7 +164,6 @@ const RUST: Spec = Spec {
     closures: &["closure_expression"],
     classes: &["struct_item"],
     scopes: &["impl_item", "trait_item"],
-    members: &["declaration_list"],
     separator: "::",
     structures: &[
         ("match_expression", &["body"]),
@@ -194,7 +190,6 @@ const PYTHON: Spec = Spec {
     closures: &["lambda"],
     classes: &["class_definition"],
     scopes: &["class_definition"],
-    members: &["block", "decorated_definition"],
     separator: ".",
     structures: &[
         ("for_statement", &["body"]),

@@ -1,5 +1,7 @@
 """Exercises Python naming, documentation and cognitive complexity rules."""
 
+import sys
+
 
 def sum_of_primes(maximum):
     """Adds the primes up to maximum (SonarSource's 7, less the labelled jump)."""
@@ -50,3 +52,19 @@ def page(title):
   <title>%s</title>
 </html>
 """ % title
+
+
+class Popen:
+    if sys.platform == "win32":
+
+        def _execute_child(self):
+            return 1
+
+    else:
+
+        def _execute_child(self):
+            return 2
+
+    class Inner:
+        def deep(self):
+            return 3
