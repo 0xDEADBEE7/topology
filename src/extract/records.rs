@@ -13,7 +13,7 @@ pub(super) fn records(root: &Path, repo: &str, path: &Path) -> Result<Vec<Value>
     let relative = relative.strip_prefix("./").unwrap_or(&relative).to_owned();
     let analysed = crate::walk::analyse(&relative, &source)?;
     let language = analysed.language;
-    let imports = imports::imports(root, repo, &relative, language, &source);
+    let imports = imports::imports(root, repo, &analysed);
     let exports: Vec<_> = (analysed.fns.iter().map(|f| (f.line_start, f.line_end)))
         .chain(analysed.classes.iter().map(|c| (c.line_start, c.line_end)))
         .filter_map(|(start, end)| export(language, &source, start, end))

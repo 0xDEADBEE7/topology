@@ -132,9 +132,70 @@ fn extract_records_signatures_grouped_imports_and_module_paths() {
     let imported = |local: &str| {
         records
             .iter()
-            .any(|r| r["type"] == "import" && r["local_name"] == local)
+            .any(|r| r["type"] == "import" && r["source"] == local)
     };
-    assert!(imported("metrics") && imported("collect"));
+    assert!(imported("crate::metrics") && imported("crate::visit::collect"));
+}
+
+#[test]
+fn extract_reads_imports_from_syntax_and_resolves_relative_ones() {
+    let project = Project::new();
+    let script = "export * from './a';\nexport {\n  b,\n} from './b';\nimport './side.css';\nimport {\n  c,\n} from './c';\nconst lazy = import(/* chunk */ './lazy');\nconst r = require('./r');\nimport q = require('./q');\nimport React from 'react';\n";
+    project.write("src/index.ts", script);
+    for file in ["a.ts", "b.ts", "c.tsx", "lazy.ts", "r.js", "q.ts"] {
+        project.write(&format!("src/{file}"), "export const x = 1;\n");
+    }
+    let python = "import os.path as p, json\nfrom .. import m\nfrom ...a import (b, c as d)\nfrom . import *\n";
+    project.write("pkg/sub/mod.py", python);
+    for file in ["pkg/m.py", "a.py", "pkg/sub/__init__.py"] {
+        project.write(file, "");
+    }
+    project.write(
+        "lib.rs",
+        "use a::{b, c as d, e::{self, /* c */ f}, g::*};\n",
+    );
+    let records: Vec<serde_json::Value> = String::from_utf8(project.run("extract").stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .filter(|record: &serde_json::Value| record["type"] == "import")
+        .collect();
+    let imports = |path: &str| -> Vec<String> {
+        let records = records.iter().filter(|r| r["path"] == path);
+        records
+            .map(|r| {
+                let (name, resolved) = (&r["imported_name"], &r["resolved_path"]);
+                format!(
+                    "{} {} {name} {resolved}",
+                    r["line"],
+                    r["source"].as_str().unwrap()
+                )
+            })
+            .collect()
+    };
+    let script = [
+        "1 ./a null \"src/a.ts\"",
+        "2 ./b null \"src/b.ts\"",
+        "5 ./side.css null null",
+        "6 ./c null \"src/c.tsx\"",
+        "9 ./lazy null \"src/lazy.ts\"",
+        "10 ./r null \"src/r.js\"",
+        "11 ./q null \"src/q.ts\"",
+        "12 react null null",
+    ];
+    assert_eq!(imports("src/index.ts"), script);
+    let python = [
+        "1 os.path null null",
+        "1 json null null",
+        "2 .. \"m\" \"pkg/m.py\"",
+        "3 ...a \"b\" \"a.py\"",
+        "3 ...a \"c\" \"a.py\"",
+        "4 . \"*\" \"pkg/sub/__init__.py\"",
+    ];
+    assert_eq!(imports("pkg/sub/mod.py"), python);
+    let rust = ["a::b", "a::c", "a::e", "a::e::f", "a::g::*"];
+    let rust = rust.map(|source| format!("1 {source} null null"));
+    assert_eq!(imports("lib.rs"), rust);
 }
 
 #[test]

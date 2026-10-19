@@ -1,7 +1,6 @@
 //! Coordinates source extraction into file, import, and symbol records.
 
 mod declarations;
-mod import_syntax;
 mod imports;
 mod inspection;
 mod resolution;

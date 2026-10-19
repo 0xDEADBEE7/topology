@@ -2,7 +2,7 @@
 
 use crate::{
     lang::{Language, Spec},
-    metrics::{ClassMetrics, FileMetrics, FnMetrics},
+    metrics::{ClassMetrics, FileMetrics, FnMetrics, Import},
     syntax,
 };
 use std::cmp::Reverse;
@@ -24,10 +24,11 @@ pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
         .ok_or("the parser returned no tree")?;
     let mut walker = Walker {
         spec,
-        source: source.as_bytes(),
+        source,
         code: vec![false; source.lines().count() + 1],
         fns: Vec::new(),
         classes: Vec::new(),
+        imports: Vec::new(),
     };
     walker.walk(tree.root_node(), None, 0);
     let parse_errors = syntax_errors(tree.root_node());
@@ -42,6 +43,7 @@ pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
         parse_errors,
         fns: walker.units(),
         classes: walker.classes,
+        imports: walker.imports,
     })
 }
 
@@ -71,11 +73,12 @@ fn syntax_errors(node: Node<'_>) -> usize {
 /// Walks one syntax tree using its language's table, collecting units, classes and code.
 struct Walker<'a> {
     spec: &'static Spec,
-    source: &'a [u8],
+    source: &'a str,
     /// Whether each row holds code: text that is neither a comment nor a string statement.
     code: Vec<bool>,
     fns: Vec<FnMetrics>,
     classes: Vec<ClassMetrics>,
+    imports: Vec<Import>,
 }
 
 impl Walker<'_> {
@@ -97,6 +100,7 @@ impl Walker<'_> {
                 line_end: node.end_position().row + 1,
             });
         }
+        syntax::imports(node, self.source, &mut self.imports);
         let function = self.spec.functions.contains(&kind);
         let named = function
             .then(|| self.unit_name(node, unit.is_some()))
@@ -130,7 +134,7 @@ impl Walker<'_> {
             line_end: node.end_position().row + 1,
             loc: 0,
             cognitive: 0,
-            has_docstring: syntax::documented(self.spec, self.source, node, declaration),
+            has_docstring: syntax::documented(self.spec, self.source.as_bytes(), node, declaration),
         });
         self.fns.len() - 1
     }
@@ -155,7 +159,7 @@ impl Walker<'_> {
     /// Marks the rows of source text that no child node covers, such as tokens and the
     /// grammar's hidden tokens, as code.
     fn mark_code(&mut self, (row, start): (usize, usize), end: usize) {
-        let text = self.source.get(start..end).unwrap_or_default();
+        let text = self.source.as_bytes().get(start..end).unwrap_or_default();
         for (offset, line) in text.split(|byte| *byte == b'\n').enumerate() {
             let row = self.code.get_mut(row + offset);
             if let Some(code) = row.filter(|_| !line.trim_ascii().is_empty()) {
@@ -292,7 +296,7 @@ impl Walker<'_> {
     }
 
     fn text(&self, node: Node<'_>) -> Option<String> {
-        node.utf8_text(self.source).ok().map(str::to_owned)
+        self.source.get(node.byte_range()).map(str::to_owned)
     }
 
     /// Follows wrappers and declarations so a unit starts where its JSDoc attaches.

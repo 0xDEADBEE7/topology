@@ -1,41 +1,40 @@
-//! Resolves repository-local imports to supported source paths.
+//! Resolves relative imports to supported source files under the extraction root.
 
-use crate::lang::{Language, EXTENSIONS};
+use crate::{
+    lang::{Language, EXTENSIONS},
+    metrics::Import,
+};
 use std::path::{Path, PathBuf};
 
-/// Resolve an import against files local to the repository.
-pub(super) fn resolve_import(
-    root: &Path,
-    current: &str,
-    language: &str,
-    source: &str,
-) -> Option<String> {
-    let candidates = match language {
-        "rust" => {
-            let module = source.strip_prefix("crate::")?.split("::").next()?;
-            let src = root.join("src");
-            vec![
-                src.join(format!("{module}.rs")),
-                src.join(module).join("mod.rs"),
-            ]
-        }
-        "python" => {
-            let module = source.rsplit_once('.').map_or(source, |(module, _)| module);
-            let base = root.join(Path::new(&module.replace('.', "/")));
-            vec![base.with_extension("py"), base.join("__init__.py")]
-        }
-        "typescript" | "javascript" if source.starts_with('.') => {
-            let directory = Path::new(current).parent().unwrap_or(Path::new("."));
-            script_candidates(&root.join(directory.join(source)))
-        }
-        _ => return None,
+/// Resolves a relative script specifier or Python module to a file under `root`.
+pub(super) fn resolve_import(root: &Path, current: &str, import: &Import) -> Option<String> {
+    let directory = root.join(current).parent()?.to_owned();
+    let candidates = match Language::from_path(current)? {
+        _ if !import.source.starts_with('.') => return None,
+        Language::Python => python_candidates(directory, import),
+        _ => script_candidates(&directory.join(&import.source)),
     };
     candidates.into_iter().find_map(|candidate| {
         let path = candidate
             .is_file()
             .then(|| candidate.canonicalize().ok())??;
-        Some(path.strip_prefix(root).ok()?.to_string_lossy().to_string())
+        Some(path.strip_prefix(root).ok()?.to_string_lossy().into_owned())
     })
+}
+
+/// Lists files `from ..a.b import c` may name: each dot after the first climbs a package,
+/// and `c` may be a submodule.
+fn python_candidates(mut base: PathBuf, import: &Import) -> Vec<PathBuf> {
+    let module = import.source.trim_start_matches('.');
+    for _ in 1..import.source.len() - module.len() {
+        base.pop();
+    }
+    base.extend(module.split('.').filter(|part| !part.is_empty()));
+    let named = import.name.as_ref().map(|name| base.join(name));
+    let modules = named.into_iter().chain([base]);
+    modules
+        .flat_map(|module| [module.with_extension("py"), module.join("__init__.py")])
+        .collect()
 }
 
 /// Lists files a relative script import may name: the path itself, the path with each

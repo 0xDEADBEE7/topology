@@ -1,6 +1,7 @@
-//! Reads documentation: doc nodes for the walker, and leading comments and docstrings by line.
+//! Reads documentation and imports: doc nodes and import statements for the walker, and
+//! leading comments and docstrings by line.
 
-use crate::lang::Spec;
+use crate::{lang::Spec, metrics::Import};
 use tree_sitter::Node;
 
 /// Recognizes a bare string statement, which documents rather than computes.
@@ -209,4 +210,100 @@ fn summary(text: &[&str]) -> Option<String> {
 /// Recognizes a reStructuredText title: one line of text above an underline.
 fn is_heading(paragraph: &[&str]) -> bool {
     matches!(paragraph, [_, underline] if underline.chars().all(|c| "=-~^".contains(c)))
+}
+
+/// Adds the imports a node makes: JS `import`, `export … from`, `import()` and `require()`
+/// (one per specifier), Python `import` and `from … import` (one per name) and Rust `use`
+/// (one per expanded path).
+pub fn imports(node: Node<'_>, source: &str, list: &mut Vec<Import>) {
+    let line = node.start_position().row + 1;
+    let specifier = match node.kind() {
+        "import_statement" | "export_statement" | "import_require_clause" => {
+            node.child_by_field_name("source")
+        }
+        "call_expression" => called(node, source),
+        _ => None,
+    };
+    if let Some(string) = specifier.filter(|string| string.kind() == "string") {
+        let quoted = &source[string.byte_range()];
+        let source = quoted[1..quoted.len() - 1].to_owned();
+        list.push(Import {
+            line,
+            source,
+            name: None,
+        });
+    }
+    match node.kind() {
+        "import_statement" | "import_from_statement" => python_imports(node, source, list),
+        "use_declaration" => {
+            let tree = node.child_by_field_name("argument");
+            tree.into_iter()
+                .for_each(|tree| use_tree(tree, "", line, source, list));
+        }
+        _ => {}
+    }
+}
+
+/// The string named by `import("x")` or `require("x")`, past any comment argument.
+fn called<'t>(call: Node<'t>, source: &str) -> Option<Node<'t>> {
+    let callee = &source[call.child(0)?.byte_range()];
+    let arguments = call.child_by_field_name("arguments")?;
+    let mut cursor = arguments.walk();
+    let first = arguments
+        .named_children(&mut cursor)
+        .find(|a| a.kind() != "comment");
+    first.filter(|_| matches!(callee, "import" | "require"))
+}
+
+/// Python `import a.b as c` and `from ..a import b, *`: one import per name, keeping the
+/// module's leading dots.
+fn python_imports(node: Node<'_>, source: &str, list: &mut Vec<Import>) {
+    let text = |node: Node<'_>| source[node.byte_range()].to_owned();
+    let line = node.start_position().row + 1;
+    let module = node.child_by_field_name("module_name").map(text);
+    let wildcard = text(node).ends_with('*').then(|| "*".to_owned());
+    let mut cursor = node.walk();
+    let names = node.children_by_field_name("name", &mut cursor);
+    for name in names
+        .map(|n| text(n.child_by_field_name("name").unwrap_or(n)))
+        .chain(wildcard)
+    {
+        let (source, name) = match &module {
+            Some(module) => (module.clone(), Some(name)),
+            None => (name, None),
+        };
+        list.push(Import { line, source, name });
+    }
+}
+
+/// Expands a Rust use tree into one import per path; `self` in a list names its prefix.
+fn use_tree(node: Node<'_>, prefix: &str, line: usize, source: &str, list: &mut Vec<Import>) {
+    let own = match node.kind() {
+        "scoped_use_list" | "use_as_clause" => node.child_by_field_name("path"),
+        _ => Some(node),
+    };
+    let own = own.map_or("", |own| &source[own.byte_range()]);
+    let path = match (prefix, own) {
+        ("", own) | (own, "self") => own.to_owned(),
+        _ => format!("{prefix}::{own}"),
+    };
+    match node.kind() {
+        "use_list" => {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                use_tree(child, prefix, line, source, list);
+            }
+        }
+        "scoped_use_list" => {
+            let tree = node.child_by_field_name("list");
+            tree.into_iter()
+                .for_each(|tree| use_tree(tree, &path, line, source, list));
+        }
+        kind if kind.ends_with("comment") => {}
+        _ => list.push(Import {
+            line,
+            source: path,
+            name: None,
+        }),
+    }
 }

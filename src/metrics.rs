@@ -29,4 +29,12 @@ pub struct FileMetrics {
     pub parse_errors: usize,
     pub fns: Vec<FnMetrics>,
     pub classes: Vec<ClassMetrics>,
+    pub imports: Vec<Import>,
+}
+
+/// A module a file imports, as written, and the Python name taken from it.
+pub struct Import {
+    pub line: usize,
+    pub source: String,
+    pub name: Option<String>,
 }

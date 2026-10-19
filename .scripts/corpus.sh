@@ -42,7 +42,8 @@ stats() {
         + " functions=\($fns | length)"
         + " anonymous=\($fns | map(select(.name == "<anonymous>")) | length)"
         + " bogus_imports=\(map(select(.type == "import" and ([.source, .imported_name]
-            | map(. // "" | test("[{}(),\\s]|[.:]$")) | any))) | length)"
+            | map(. // "" | test("[{}(),\\s]|[.:]$") and (test("^[./]+$") | not)) | any)))
+            | length)"
         + " duplicate_ids=\($dups)"
         + " empty_descriptions=\(map(select(.type == "file" and .description == "")) | length)"' "$1"
 }
