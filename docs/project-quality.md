@@ -11,9 +11,10 @@ cargo run --quiet -- extract /path/to/project
 Supported extensions are `.rs`, `.py`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`,
 `.jsx`, `.mjs`, and `.cjs`. TypeScript and TSX use separate grammars; JavaScript
 uses the TSX grammar. React components are named by their bindings (including
-through the first argument of `forwardRef` and `memo`), class members read `Class.method`, test
-callbacks become units such as `it("undoes")`, and other unnamed callbacks fold
-into the function that contains them. Assessment
+through the first argument of `forwardRef` and `memo`), class members read `Class.method`, a
+callback passed after a string label becomes a unit named after its call, such as
+`it("undoes")` or `app.get("/users")`, and other unnamed callbacks fold into the
+function that contains them. Assessment
 does not require installing or executing the target project's dependencies.
 
 Scoring and extraction share deterministic source discovery. Hidden entries,

@@ -159,7 +159,7 @@ fn scoring_rejects_empty_projects_and_measures_invalid_source() {
 }
 
 #[test]
-fn commands_skip_files_they_cannot_parse() {
+fn commands_skip_unreadable_files_and_measure_broken_ones() {
     let project = Project::new();
     project.write("good.rs", "//! Good.\n/// Works.\npub fn works() {}\n");
     project.write("broken.rs", "fn broken( {");
@@ -181,7 +181,7 @@ fn commands_skip_files_they_cannot_parse() {
     }
     for command in ["score", "extract"] {
         let stderr = project.run(command).stderr;
-        assert!(String::from_utf8_lossy(&stderr).contains("broken.rs"));
+        assert!(String::from_utf8_lossy(&stderr).contains("broken.rs: syntax errors"));
     }
     let find = Command::new(env!("CARGO_BIN_EXE_topo"))
         .args(["find", "works"])

@@ -1,7 +1,8 @@
 //! Maps file extensions to languages and holds the syntax tables that drive the walker.
 //!
 //! Adding a language means one `EXTENSIONS` row per extension, a `Language` variant, and
-//! a `Spec` naming the grammar's node kinds for the constructs `walk` measures.
+//! a `Spec` naming the grammar's node kinds for the constructs `walk` measures, plus a
+//! check of the few kinds `walk` names itself (calls, labels, let chains, strings).
 
 use std::path::Path;
 use tree_sitter_typescript::{LANGUAGE_TSX, LANGUAGE_TYPESCRIPT};
@@ -61,7 +62,8 @@ impl Language {
 
 /// Node kinds and tokens a grammar uses for the constructs the walker measures.
 pub struct Spec {
-    /// Function forms measured as units when they have a name.
+    /// Function forms measured as units when named, or when outside any unit (named after
+    /// their call).
     pub functions: &'static [&'static str],
     /// Function forms that always fold into the enclosing unit, such as closures.
     pub closures: &'static [&'static str],

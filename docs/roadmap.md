@@ -56,7 +56,24 @@ Status (October 2026): M0–M5 done.
   (was 13.3 s). M5 removed 135 physical lines net (176 before the M3 fixes), short of
   the planned 260–320: the Rust and Python tables and code-line counting cost about
   100 lines of what syn and the heuristic freed.
-- Size: `src` is 22 files, 2,154 physical and 1,832 code lines, all green. Budget 22
+- M5 review (27 of 35 findings confirmed; all fixed here or moved to M6): Rust let
+  chains count their `&&` run; Rust docs reach past attributes and plain comments, and
+  `////` is not a doc; Python methods under `if`/`try` and in nested classes qualify
+  (`Popen._execute_child`, `Outer.Inner.deep`); Rust impls use the type's own name
+  (`S::begin`, `Error::from`, 38 ripgrep names); `memo(Base, compare)` no longer names
+  the comparator; text in hidden grammar tokens counts (Python strings with escapes,
+  Rust raw-string delimiters); each code row has one owner, so sibling callbacks,
+  multi-declarator `const` and functions in `it.each` tables no longer double-count,
+  and a method-chain callback starts at its arguments (excalidraw's i18n `.filter`
+  callback was 83 rows of array data); multi-line receivers print as `…`; equal-range
+  outline entries share a depth. Rust and Python fixtures now pin whitepaper scores,
+  names, docs and lookups (before, a one-token table typo cut topo's own cognitive total
+  from 220 to 126 with every test green). cognitive_complexity 1.3.0 (PyPI) on requests:
+  96.9% exact, 99.9% same band; every difference is topo's documented nested-function
+  deviation or the package's `elif` nesting bug. Kept: let-else adds nothing, as in
+  SonarSource's own Rust analyzer. The corpus harness now flags requests' 70 malformed
+  Python imports (it reported 0).
+- Size: `src` is 22 files, 2,176 physical and 1,845 code lines, all green. Budget 22
   files and 1,857 code lines; yellow share 0‰.
 
 ## 1. Recommendation
@@ -117,7 +134,7 @@ The flags `--metrics`, `--all-metrics` and `--functions` are removed too.
 
 | Metric | Green | Yellow | Red |
 |---|---|---|---|
-| Code lines: rows with at least one non-comment token, docstrings excluded. Used from M5; before that, physical lines with today's 60/70 limits. | ≤40 | 41–75 | >75 |
+| Code lines: rows holding source text other than comments and Python string statements; each row counts for the smallest function range holding it. Used from M5; before that, physical lines with today's 60/70 limits. | ≤40 | 41–75 | >75 |
 | Cognitive complexity (Sonar spec 1.7) | ≤10 | 11–15 | >15 |
 
 **Cognitive complexity rules:**
@@ -248,7 +265,10 @@ until M5 and code lines from then on.
 
 ### M6: one data model read from the syntax tree
 - One typed `FileInfo` record carries doc text, signature, `exported` and `parent`, and
-  every command uses it.
+  every command uses it. Descriptions come from the doc node the walker finds, so the
+  Doc column and `extract` agree (today the line reader misses single-quoted and
+  prefixed Python docstrings, and the walker misses JSDoc above class-field arrows,
+  object pairs and assignments).
 - Imports come from syntax-tree nodes: re-exports, `import()`, `require()`, Python relative
   imports with dot levels, Rust grouped `use` expanded per name. Resolve relative imports
   only.
