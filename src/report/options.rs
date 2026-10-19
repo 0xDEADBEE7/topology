@@ -24,7 +24,8 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             detail: false,
-            colour: std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none(),
+            colour: std::io::stdout().is_terminal()
+                && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty()),
             metrics: vec![Metric::Nmi],
             guide: false,
         }

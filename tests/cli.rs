@@ -71,7 +71,11 @@ fn closed_output_pipes_end_quietly() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_ne!(output.status.code(), Some(101));
+    #[cfg(unix)]
+    assert_eq!(
+        std::os::unix::process::ExitStatusExt::signal(&output.status),
+        Some(13)
+    );
 }
 
 #[test]

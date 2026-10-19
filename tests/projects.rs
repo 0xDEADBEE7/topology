@@ -46,8 +46,10 @@ impl Drop for Project {
 #[test]
 fn project_commands_exclude_dependencies_and_resolve_tsx() {
     let project = Project::new();
-    project.write("src/App.tsx", "/** Application entry. */\nimport { Card } from './ui';\nimport { config } from './config.mjs';\nimport { pick } from './App.selection';\nexport function App() { return <Card />; }");
+    project.write("src/App.tsx", "/** Application entry. */\nimport { Card } from './ui';\nimport { config } from './config.mjs';\nimport { pick } from './App.selection';\nimport { Button } from './Button';\nexport function App() { return <Card />; }");
     project.write("src/App.selection.ts", "export const pick = () => 1;");
+    project.write("src/Button.tsx", "export const Button = () => 1;");
+    project.write("src/Button/index.ts", "export const Button = () => 2;");
     project.write(
         "src/ui/index.tsx",
         "/** A greeting card. */\nexport const Card = () => <div />;",
@@ -83,7 +85,7 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
             .iter()
             .filter(|record| record["type"] == "file")
             .count(),
-        6
+        8
     );
     for (name, language, cc) in [
         ("config", "typescript", 1),
@@ -106,6 +108,7 @@ fn project_commands_exclude_dependencies_and_resolve_tsx() {
         resolved("./App.selection"),
         Some("src/App.selection.ts".into())
     );
+    assert_eq!(resolved("./Button"), Some("src/Button.tsx".into()));
 }
 
 #[test]
@@ -124,10 +127,25 @@ fn commands_skip_files_they_cannot_parse() {
     let project = Project::new();
     project.write("good.rs", "//! Good.\n/// Works.\npub fn works() {}\n");
     project.write("broken.rs", "fn broken( {");
+    project.write("locked/hidden.rs", "fn hidden() {}");
+    #[cfg(unix)]
+    let lock = |mode| {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(project.0.join("locked"), fs::Permissions::from_mode(mode)).unwrap()
+    };
+    #[cfg(unix)]
+    lock(0o000);
+    let outputs = ["score", "extract", "tree"].map(|command| project.run(command));
+    #[cfg(unix)]
+    lock(0o755);
+    for output in outputs {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
+        assert!(stderr.contains("locked") || cfg!(not(unix)), "{stderr}");
+    }
     for command in ["score", "extract"] {
-        let output = project.run(command);
-        assert!(output.status.success(), "{command}");
-        assert!(String::from_utf8_lossy(&output.stderr).contains("broken.rs"));
+        let stderr = project.run(command).stderr;
+        assert!(String::from_utf8_lossy(&stderr).contains("broken.rs"));
     }
     let find = Command::new(env!("CARGO_BIN_EXE_topo"))
         .args(["find", "works"])

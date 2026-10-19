@@ -28,8 +28,11 @@ pub fn collect(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("");
-        if !excluded(name) {
-            collect(&path, paths)?;
+        if excluded(name) {
+            continue;
+        }
+        if let Err(error) = collect(&path, paths) {
+            eprintln!("warning: {error}; skipped");
         }
     }
     Ok(())

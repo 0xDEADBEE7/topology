@@ -33,7 +33,7 @@ pub fn analyse(path: &str, source: &str) -> Result<FileMetrics, String> {
     let metrics = for_path(path)?.analyse(path, source)?;
     if metrics.parse_errors > 0 {
         eprintln!(
-            "warning: {path}: {} syntax errors; measured the recoverable code",
+            "warning: {path}: syntax errors: {}; measured the recoverable code",
             metrics.parse_errors
         );
     }

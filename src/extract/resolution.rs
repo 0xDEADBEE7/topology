@@ -1,5 +1,6 @@
 //! Resolves repository-local imports to supported source paths.
 
+use crate::adapters::ECMA_EXTENSIONS;
 use std::path::{Path, PathBuf};
 
 /// Resolve an import against files local to the repository.
@@ -51,12 +52,12 @@ pub(super) fn resolve_import(
 /// script extension or index file, and TypeScript sources imported by their `.js` names.
 fn script_candidates(base: &Path) -> Vec<PathBuf> {
     let mut candidates = vec![base.to_owned()];
-    for extension in crate::adapters::ECMA_EXTENSIONS {
+    for extension in ECMA_EXTENSIONS {
         let mut file = base.as_os_str().to_owned();
         file.push(format!(".{extension}"));
         candidates.push(file.into());
-        candidates.push(base.join(format!("index.{extension}")));
     }
+    candidates.extend(ECMA_EXTENSIONS.map(|extension| base.join(format!("index.{extension}"))));
     let emitted = base.extension().and_then(|ext| ext.to_str());
     if matches!(emitted, Some("js" | "jsx" | "mjs" | "cjs")) {
         candidates.extend(["ts", "tsx", "mts", "cts"].map(|ts| base.with_extension(ts)));

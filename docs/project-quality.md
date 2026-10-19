@@ -20,7 +20,7 @@ dependency folders (`node_modules`, `vendor`), build folders (`target`, `dist`,
 Explicitly named directories are scanned even if their name is normally excluded.
 TypeScript with syntax errors is measured from tree-sitter's recovered tree; a
 warning names the file and its error count, and extraction records it as
-`parse_errors`. Every command skips a file it cannot read or parse (Rust that
+`parse_errors`. Every command skips a file or directory it cannot read or parse (Rust that
 `syn` rejects) with a warning naming it; scoring fails only when no file could
 be analysed.
 
